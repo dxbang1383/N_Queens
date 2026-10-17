@@ -69,6 +69,6 @@ def solve_gurobi_mip(n):
         print("Khong tim thay loi giai!")
 
 if __name__ == "__main__":
-    n = 20
+    n = 40
 
     solve_gurobi_mip(n)

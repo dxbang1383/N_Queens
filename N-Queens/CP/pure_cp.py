@@ -3,7 +3,7 @@ from ortools.constraint_solver import pywrapcp
 
 def solve_pure_cp(n):
     # 1. Khoi tao solver CP thuan (Constraint Solver co dien cua Google)
-    solver = pywrapcp.Solver("N-Queens-Pure-CP")
+    solver = pywrapcp.Solver("N-Queens-PureCP")
 
     # 2. Tao bien: queens[i] la cot cua quan hau tai hang i
     queens = []
