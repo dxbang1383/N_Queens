@@ -1,0 +1,396 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[vietnamese,english]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{cite}
+\usepackage{caption}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\title{\textbf{\LARGE Báo Cáo Thực Nghiệm So Sánh Các Phương Pháp Chính Xác Cho Bài Toán N-Queens: \\ SAT Encodings, Constraint Programming và Integer Linear Programming}}
+
+\author{
+    \textbf{Sinh viên thực hiện: Đỗ Xuân Bằng - 24021383}\\
+    Môn học: Các vấn đề hiện đại trong KHMT (INT3011E) \\
+    Trường Đại học Công nghệ -- Đại học Quốc gia Hà Nội (VNU-UET)
+}
+
+\date{\today}
+
+\begin{document}
+
+\selectlanguage{vietnamese}
+\maketitle
+
+\begin{abstract}
+\noindent Bài toán $N$-Queens là bài toán kinh điển trong khoa học máy tính, yêu cầu đặt $N$ quân Hậu lên bàn cờ $N \times N$ sao cho không có hai quân Hậu nào tấn công lẫn nhau. Báo cáo này so sánh thực nghiệm một cách trực quan và toàn diện giữa ba trường phái giải quyết bài toán tổ hợp: SAT Solving (với 5 kỹ thuật mã hóa At-Most-One: Binomial, Binary, Sequential Counter, Commander, Product), Constraint Programming (CP với 4 bộ giải/mô hình: Pure CP Backtracking, OR-Tools CP-SAT biến nguyên, CP-SAT Boolean, IBM CPLEX CP), và Integer Linear Programming (ILP/MIP với 3 bộ giải: Gurobi MIP, IBM CPLEX MIP, SCIP). Hệ thống thực nghiệm được đo đạc lặp lại 5 lần độc lập với cơ chế ngắt tiến trình con chuẩn xác. Kết quả thực nghiệm chỉ ra rõ ưu điểm, nhược điểm và giới hạn thực tế của từng phương pháp: CPLEX CP đạt độ ổn định thời gian gần như hằng số; SAT Binary là phương pháp ổn định nhất nhóm SAT; Gurobi MIP chứng tỏ sức mạnh giải thuật vượt bậc ở quy mô lớn ($N=800$, 640.000 biến giải trong $0.224$s nhờ Primal Feasibility Heuristics); trong khi các phương pháp SAT và Pure Backtracking gặp phải rào cản bùng nổ mệnh đề và không gian tìm kiếm.
+\end{abstract}
+
+\vspace{0.5em}
+\noindent\textbf{Từ khóa:} $N$-Queens, SAT Solving, Constraint Programming, Integer Linear Programming, AMO Encodings, Gurobi, OR-Tools, So sánh thực nghiệm.
+
+\vspace{1.5em}
+
+\section{Giới thiệu (Introduction)}
+
+\subsection{Bài toán N-Queens và Bối cảnh}
+Bài toán $N$-Queens là sự mở rộng của bài toán 8 quân Hậu kinh điển do Max Bezzel đề xuất năm 1848 trên bàn cờ vua $8 \times 8$. Yêu cầu của bài toán rất tự nhiên: đặt $N$ quân Hậu lên bàn cờ kích thước $N \times N$ sao cho không có bất kỳ hai quân Hậu nào nằm chung một \textbf{hàng}, chung một \textbf{cột}, hay chung một \textbf{đường chéo}.
+
+Mặc dù việc tìm một nghiệm bất kỳ cho $N$-Queens có thể giải bằng các thuật toán giải tích trực tiếp, việc đưa bài toán về các dạng biểu diễn chuẩn như SAT, CSP hay ILP lại là bài toán chuẩn (benchmark) lý tưởng nhất trong môn học Tối ưu hóa Tổ hợp. Cấu trúc ràng buộc của $N$-Queens tương đồng mật thiết với nhiều bài toán thực tế:
+\begin{itemize}
+    \item \textbf{Lập lịch tác vụ (Scheduling):} Sắp xếp các công việc sao cho không xảy ra xung đột tài nguyên và thời gian.
+    \item \textbf{Thiết kế mạch tích hợp (VLSI Layout):} Phân bổ vị trí các linh kiện trên chip để hạn chế tối đa hiện tượng can nhiễu tín hiệu.
+    \item \textbf{Kiểm thử phần mềm tự động:} Sinh bộ dữ liệu kiểm thử trực giao phủ kín các nhánh logic.
+\end{itemize}
+
+\subsection{Ba trường phái giải bài toán tổ hợp chính xác}
+Để giải bài toán một cách chính xác (Exact Methods), ngành khoa học máy tính phát triển 3 hướng tiếp cận chủ đạo:
+\begin{enumerate}
+    \item \textbf{SAT Solving (Thỏa mãn mệnh đề logic Boolean):} Đưa toàn bộ hệ ràng buộc về dạng Chuẩn tắc Hội (CNF). Các bộ giải SAT hiện đại (như Glucose, CaDiCaL) sử dụng thuật toán CDCL (Conflict-Driven Clause Learning) có khả năng học từ xung đột để cắt tỉa không gian tìm kiếm.
+    \item \textbf{Constraint Programming (CP - Lập trình ràng buộc):} Mô hình hóa bằng các biến có miền giá trị cụ thể (domain) kết hợp các ràng buộc toàn cục (như \texttt{AllDifferent}). Bộ giải CP sử dụng cơ chế lan truyền ràng buộc (Constraint Propagation) để liên tục thu hẹp miền giá trị trước khi rẽ nhánh tìm kiếm.
+    \item \textbf{Integer Linear Programming (ILP - Quy hoạch tuyến tính nguyên):} Mô hình hóa bài toán bằng các phương trình/bất phương trình tuyến tính trên ma trận biến nhị phân 0-1. Các bộ giải ILP (như Gurobi, CPLEX, SCIP) sử dụng thuật toán Nới lỏng tuyến tính (LP Relaxation) kết hợp Nhánh và Cắt (Branch-and-Cut).
+\end{enumerate}
+
+\subsection{Mục tiêu của đề tài}
+Thay vì chỉ dừng lại ở mặt lý thuyết, mục tiêu trọng tâm của báo cáo này là:
+\begin{enumerate}
+    \item \textbf{Cung cấp cái nhìn trực quan, thực tế:} Xây dựng chuẩn mực đo đạc đồng bộ để so tài trực tiếp 12 bộ giải trên cùng một bài toán cụ thể.
+    \item \textbf{Khảo sát 5 kỹ thuật mã hóa SAT:} Làm rõ ảnh hưởng của các cách biểu diễn At-Most-One (AMO) đến số lượng biến, số lượng mệnh đề và thời gian chạy.
+    \item \textbf{Đánh giá ưu và nhược điểm rõ ràng:} Phân tích vì sao phương pháp này chạy nhanh, vì sao phương pháp kia bị nghẽn (hiện tượng bùng nổ mệnh đề, hạn chế bộ nhớ, hoặc rào cản bản quyền).
+    \item \textbf{Đánh giá khả năng mở rộng (Scalability):} Thử nghiệm áp lực ở kích thước lớn ($N \ge 100$ đến $N=800$) trên các bộ giải mạnh nhất để thấy rõ năng lực công nghiệp của công cụ hiện đại.
+\end{enumerate}
+
+\section{Mô hình hóa Toán học (Problem Formulations)}
+
+\subsection{Mô hình SAT (Boolean Logic)}
+Trong SAT, bàn cờ được biểu diễn bởi $N^2$ biến logic:
+\begin{equation}
+    x_{i,j} \in \{\text{True}, \text{False}\}, \quad 0 \le i, j < N
+\end{equation}
+trong đó $x_{i,j} = \text{True}$ tương đương với việc đặt quân Hậu tại hàng $i$, cột $j$. Để các bộ giải SAT xử lý, mỗi biến được gán chỉ số nguyên dương duy nhất: $\text{id}(i, j) = i \times N + j + 1$.
+
+Hệ ràng buộc gồm 2 nhóm:
+\begin{itemize}
+    \item \textbf{At-Least-One (ALO):} Mỗi hàng và mỗi cột phải có ít nhất 1 quân Hậu:
+    \begin{align}
+        \text{Hàng } i: & \quad (x_{i,0} \lor x_{i,1} \lor \dots \lor x_{i,N-1}), \quad \forall i \in [0, N-1] \\
+        \text{Cột } j: & \quad (x_{0,j} \lor x_{1,j} \lor \dots \lor x_{N-1,j}), \quad \forall j \in [0, N-1]
+    \end{align}
+    \item \textbf{At-Most-One (AMO):} Trên mỗi hàng, mỗi cột và từng đường chéo chỉ được có tối đa 1 quân Hậu. Đây là thành phần sinh ra số lượng lớn mệnh đề nhất trong SAT.
+\end{itemize}
+
+\subsection{Mô hình Lập trình Ràng buộc (CP)}
+Khác với SAT phải dùng ma trận $N^2$ biến, mô hình CP biểu diễn vị trí các quân Hậu cực kỳ tự nhiên bằng mảng $N$ biến miền nguyên:
+\begin{equation}
+    Q = [q_0, q_1, \dots, q_{N-1}], \quad \text{với } q_i \in \{0, 1, \dots, N-1\}
+\end{equation}
+Ý nghĩa: $q_i = j$ nghĩa là quân Hậu ở hàng $i$ đang nằm tại cột $j$.
+Do mỗi biến $q_i$ chỉ nhận đúng 1 giá trị, ràng buộc "mỗi hàng có đúng 1 quân Hậu" được thỏa mãn tự động. Toàn bộ các ràng buộc còn lại được gói gọn trong 3 ràng buộc toàn cục:
+\begin{align}
+    \texttt{AllDifferent}(q_0, q_1, \dots, q_{N-1}) & \quad \text{(Không trùng cột)} \\
+    \texttt{AllDifferent}(q_0 + 0, q_1 + 1, \dots, q_{N-1} + (N-1)) & \quad \text{(Không trùng chéo chính)} \\
+    \texttt{AllDifferent}(q_0 - 0, q_1 - 1, \dots, q_{N-1} - (N-1)) & \quad \text{(Không trùng chéo phụ)}
+\end{align}
+\textbf{Đặc điểm:} Mô hình CP chỉ dùng đúng $N$ biến và 3 ràng buộc toàn cục, đem lại không gian biểu diễn cấp bậc $O(N)$.
+
+\subsection{Mô hình Quy hoạch Tuyến tính Số nguyên (ILP/MIP)}
+Mô hình ILP sử dụng ma trận $N^2$ biến nhị phân $x_{i,j} \in \{0, 1\}$ cùng hệ phương trình và bất phương trình tuyến tính:
+\begin{align}
+    \sum_{j=0}^{N-1} x_{i,j} &= 1, \quad \forall i \in [0, N-1] \quad \text{(Mỗi hàng đúng 1 Hậu)} \\
+    \sum_{i=0}^{N-1} x_{i,j} &= 1, \quad \forall j \in [0, N-1] \quad \text{(Mỗi cột đúng 1 Hậu)} \\
+    \sum_{i-j=k} x_{i,j} &\le 1, \quad \forall k \in [-(N-1), N-1] \quad \text{(Đường chéo chính)} \\
+    \sum_{i+j=s} x_{i,j} &\le 1, \quad \forall s \in [0, 2N-2] \quad \text{(Đường chéo phụ)}
+\end{align}
+Mô hình gồm $N^2$ biến nhị phân và $6N - 2$ ràng buộc tuyến tính.
+
+\section{Phân tích 5 Kỹ thuật Mã hóa SAT và Ưu nhược điểm}
+
+Ràng buộc At-Most-One (AMO) trên tập $m$ biến $X = \{x_1, \dots, x_m\}$ có thể mã hóa theo 5 cách khác nhau:
+
+\subsection{Binomial Encoding (Pairwise)}
+\textbf{Cơ chế:} Xét mọi cặp biến $(x_a, x_b)$, thêm mệnh đề phủ định $(\neg x_a \lor \neg x_b)$ với mọi $a < b$.
+\begin{itemize}
+    \item \textbf{Ưu điểm:} Cực kỳ trực quan, dễ cài đặt, không cần sinh bất kỳ biến phụ nào.
+    \item \textbf{Nhược điểm:} Số mệnh đề tăng theo $\binom{m}{2} = O(m^2)$. Khi áp dụng cho toàn bộ đường chéo của bàn cờ $N \times N$, số mệnh đề bùng nổ theo bậc 4: $O(N^4)$. Ở $N=100$, số mệnh đề vượt quá 1.640.000, gây quá tải bộ nhớ cache của vi xử lý.
+\end{itemize}
+
+\subsection{Binary Encoding}
+\textbf{Cơ chế:} Sử dụng $k = \lceil \log_2 m \rceil$ biến nhị phân phụ $b_0, \dots, b_{k-1}$ đại diện cho chỉ số bit. Nếu biến $x_i$ mang giá trị True thì các biến bit $b$ phải phản ánh đúng mã nhị phân của $i$.
+\begin{itemize}
+    \item \textbf{Ưu điểm:} Tiết kiệm số lượng mệnh đề xuống mức $O(m \log_2 m)$, số biến phụ rất ít ($O(\log_2 m)$).
+    \item \textbf{Nhược điểm:} Cắt tỉa suy diễn yếu hơn Pairwise do thông tin xung đột phải truyền gián tiếp qua các biến bit.
+\end{itemize}
+
+\subsection{Sequential Counter Encoding}
+\textbf{Cơ chế:} Sử dụng $m-1$ biến trạng thái tích lũy $s_1, \dots, s_{m-1}$ (với ý nghĩa: $s_i = \text{True}$ nếu đã có ít nhất một quân Hậu xuất hiện từ vị trí $1$ đến $i$). Ràng buộc cấm hai quân Hậu bằng: $(\neg x_i \lor \neg s_{i-1})$.
+\begin{itemize}
+    \item \textbf{Ưu điểm:} Số lượng mệnh đề hoàn toàn tuyến tính $O(m)$ với số biến phụ $O(m)$. Giữ được khả năng lan truyền đơn vị (Unit Propagation) cực mạnh.
+    \item \textbf{Nhược điểm:} Số lượng biến tăng lên do phải bổ sung các biến phụ $s_i$.
+\end{itemize}
+
+\subsection{Commander Variable Encoding}
+\textbf{Cơ chế:} Chia tập $m$ biến thành các nhóm nhỏ (thường chọn kích thước $k = 3$). Mỗi nhóm được đại diện bởi một biến chỉ huy (Commander variable) $c_g$.
+\begin{itemize}
+    \item \textbf{Ưu điểm:} Giảm hệ số hằng số của số mệnh đề so với Sequential, vẫn giữ độ phức tạp tuyến tính $O(m)$.
+    \item \textbf{Nhược điểm:} Logic phân nhóm tương đối phức tạp khi chia đệ quy ở các kích thước không chia hết cho 3.
+\end{itemize}
+
+\subsection{Product Encoding (Lưới 2 chiều)}
+\textbf{Cơ chế:} Sắp xếp tập $m$ biến thành một ma trận ảo $p \times q \ge m$ (với $p \approx \sqrt{m}, q \approx \sqrt{m}$). Dùng 2 nhóm biến phụ đại diện cho hàng ($r_1, \dots, r_p$) và cột ($c_1, \dots, c_q$). Nếu $x_i = \text{True}$ tại tọa độ $(u, v)$ thì $r_u = \text{True}$ và $c_v = \text{True}$.
+\begin{itemize}
+    \item \textbf{Ưu điểm:} Cả số biến phụ và số mệnh đề đều giảm xuống bậc căn bậc hai: $O(\sqrt{m})$.
+    \item \textbf{Nhược điểm thực tế:} Do tạo ra biến phụ 2 chiều, heuristics chọn biến rẽ nhánh của các bộ giải SAT (như Glucose-3) dễ bị phân tán, khiến thời gian giải bị dao động thất thường (heavy-tailed behavior).
+\end{itemize}
+
+\section{Kết quả Thực nghiệm và Phân tích Đánh giá}
+
+\subsection{Thiết lập Môi trường và Tiêu chí Đánh giá}
+\begin{itemize}
+    \item \textbf{Cấu hình phần cứng:} Máy tính cá nhân CPU 11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00 GHz (8 CPUs) 64-bit , 16GB RAM.
+    \item \textbf{Môi trường phần mềm:} Python 3.12, PySAT (Glucose-3), Google OR-Tools (CP-SAT), Gurobi Optimizer 13.0 (Bản quyền Academic WLS), IBM ILOG CPLEX 22.1 (Bản quyền Community), SCIP.
+    \item \textbf{Cơ chế ngắt thời gian (Timeout Mechanism):} Mỗi lượt chạy được đặt giới hạn 30.0 giây. Nhằm tránh lỗi các thư viện C++ chạy ngầm làm treo chương trình, hệ thống sử dụng tiến trình độc lập (\texttt{subprocess.run}) để hệ điều hành ngắt tiến trình con một cách tuyệt đối khi hết giờ.
+\end{itemize}
+
+\subsection{Đánh Giá Quy Mô Mô Hình: Số Biến và Số Mệnh Đề / Ràng Buộc}
+
+Bảng \ref{tab:model-scale} thể hiện quy mô biểu diễn toán học của các phương pháp qua các kích thước $N$. Số liệu thực tế cho thấy sự khác biệt bản chất giữa các trường phái:
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\caption{So sánh quy mô mô hình: Số biến (Vars) và Số mệnh đề/ràng buộc (Clauses/Constrs) theo kích thước $N$}
+    \label{tab:model-scale}
+    \resizebox{\textwidth}{!}{
+    \begin{tabular}{lrrrrrrrr}
+    \toprule
+\textbf{Phương pháp} & \multicolumn{2}{c}{\textbf{N = 8}} & \multicolumn{2}{c}{\textbf{N = 16}} & \multicolumn{2}{c}{\textbf{N = 50}} & \multicolumn{2}{c}{\textbf{N = 100}} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}
+& \textbf{Vars} & \textbf{Clauses} & \textbf{Vars} & \textbf{Clauses} & \textbf{Vars} & \textbf{Clauses} & \textbf{Vars} & \textbf{Clauses} \\
+\midrule
+\textbf{SAT Binomial}    & 64  & 744  & 256   & 6.352 & 2.500  & 203.450 & 10.000 & \textbf{1.646.900} \\
+\textbf{SAT Binary}      & 170 & 724  & 568   & 3.924 & 4.032  & 57.240  & 13.674 & 269.020 \\
+\textbf{SAT Sequential}  & 270 & 600  & 1.182 & 2.728 & 12.198 & 28.908  & 48.560 & 116.328 \\
+\textbf{SAT Commander}   & 172 & 614  & 698   & 2.674 & 7.406  & 28.722  & 29.412 & 116.154 \\
+\textbf{SAT Product}     & 252 & 690  & 836   & 2.840 & 5.120  & 28.650  & 19.464 & 116.812 \\
+\midrule
+\textbf{CP-SAT (Integer)}& \textbf{8}  & \textbf{3} & \textbf{16}  & \textbf{3} & \textbf{50} & \textbf{3} & \textbf{100} & \textbf{3} \\
+\textbf{CPLEX CP}        & \textbf{8}  & \textbf{3} & \textbf{16}  & \textbf{3} & \textbf{50} & \textbf{3} & \textbf{100} & \textbf{3} \\
+\textbf{Pure CP}         & \textbf{8}  & \textbf{3} & \textbf{16}  & \textbf{3} & \textbf{50} & \textbf{3} & \textbf{100} & \textbf{3} \\
+\midrule
+\textbf{ILP / CP-SAT Bool} & 64 & 42 & 256  & 90 & 2.500 & 294 & 10.000 & 594 \\
+\bottomrule
+\end{tabular}
+}
+\end{table*}
+
+\noindent \textbf{Nhận xét về cấu trúc mô hình:}
+\begin{itemize}
+    \item \textbf{Sự bùng nổ mệnh đề của SAT Binomial:} Ở $N=8$, Binomial chỉ có $744$ mệnh đề, nhưng khi lên $N=100$, số mệnh đề bùng nổ lên tới $\mathbf{1.646.900}$ mệnh đề theo quy luật bậc bốn $O(N^4)$.
+    \item \textbf{Sự đánh đổi của các kỹ thuật mã hóa AMO:}
+    \begin{itemize}
+        \item \textit{Sequential Counter} và \textit{Commander} tiết giảm số mệnh đề xuống mức tuyến tính $O(m)$ (chỉ $\sim 116.000$ mệnh đề ở $N=100$, giảm hơn 14 lần so với Binomial), nhưng phải trả giá bằng việc bổ sung hàng chục nghìn biến phụ ($48.560$ biến ở Sequential).
+        \item \textit{Binary Encoding} cân bằng tốt hơn về số biến mới (chỉ $13.674$ biến ở $N=100$) do số bit phụ chỉ tăng theo $\lceil \log_2 m \rceil$.
+        \item \textit{Product Encoding} giảm cả biến phụ và mệnh đề về bậc căn bậc hai $O(\sqrt{m})$, giữ quy mô mô hình ở mức rất vừa phải ($19.464$ biến, $116.812$ mệnh đề ở $N=100$).
+    \end{itemize}
+    \item \textbf{Sự thanh lịch của mô hình CP biến nguyên:} Cả CP-SAT, CPLEX CP và Pure CP chỉ cần đúng $N$ biến và 3 ràng buộc toàn cục \texttt{AllDifferent}, thể hiện độ phức tạp không gian tối ưu bậc nhất $O(N)$.
+    \item \textbf{Mô hình ILP 0-1 và CP-SAT Boolean:} Dùng ma trận $N^2$ biến nhị phân và $6N-2$ ràng buộc tuyến tính (ví dụ $N=100$ có $10.000$ biến và $594$ ràng buộc).
+\end{itemize}
+
+\subsection{Kết quả Thực nghiệm Qua 5 Lần Triển Khai Độc Lập}
+
+Để loại bỏ nhiễu ngẫu nhiên từ hệ điều hành và hiện tượng dao động heuristic rẽ nhánh, toàn bộ bài thử nghiệm được chạy lặp lại \textbf{5 lần độc lập} (tương ứng các tập dữ liệu \texttt{benchmark\_results\_1} đến \texttt{5}). Bảng \ref{tab:median-results} trình bày giá trị \textbf{Trung vị (Median Runtime)} của 5 lần chạy thực tế từ $N = 4$ đến $N = 100$.
+
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\caption{Thời gian giải Trung vị (Median Runtime tính bằng giây) qua 5 lần chạy độc lập (Timeout = 30s)}
+\label{tab:median-results}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{llrrrrrrrrr}
+\toprule
+\textbf{Nhóm} & \textbf{Solver} & \textbf{N=4} & \textbf{N=8} & \textbf{N=16} & \textbf{N=32} & \textbf{N=50} & \textbf{N=70} & \textbf{N=80} & \textbf{N=90} & \textbf{N=100} \\
+\midrule
+\textbf{SAT}
+& Binomial   & 0.000s & 0.001s & 0.015s & 0.059s & 0.536s & 2.674s & 4.816s & 8.174s & 12.786s \\
+& Binary     & 0.000s & 0.001s & 0.010s & 0.028s & 0.109s & 0.345s & 0.565s & 0.910s & 1.378s \\
+& Sequential & 0.001s & 0.001s & 0.012s & 0.114s & 2.854s & 28.443s & 15.891s & 23.534s & TIMEOUT \\
+& Commander  & 0.000s & 0.001s & 0.005s & 0.283s & 0.422s & 7.727s & TIMEOUT & TIMEOUT & TIMEOUT \\
+& Product    & 0.000s & 0.001s & 0.042s & TIMEOUT & TIMEOUT & 0.148s & TIMEOUT & 0.287s & 0.805s \\
+\midrule
+\textbf{CP}
+& \textbf{CP-SAT (Int)} & 0.019s & 0.019s & 0.025s & 0.063s & 0.165s & 0.332s & 0.436s & 0.625s & 0.727s \\
+& Pure CP               & 0.000s & 0.000s & 0.012s & TIMEOUT & TIMEOUT & TIMEOUT & TIMEOUT & TIMEOUT & TIMEOUT \\
+& \textbf{CPLEX CP}     & 0.031s & 0.028s & 0.029s & 0.030s & 0.033s & 0.034s & 0.035s & 0.034s & \textbf{0.036s} \\
+& CP-SAT Bool           & 0.015s & 0.019s & 0.027s & 0.046s & 0.089s & 0.204s & 0.277s & 0.340s & 0.473s \\
+\midrule
+\textbf{ILP}
+& \textbf{Gurobi MIP}   & 0.002s & 0.003s & 0.009s & 0.021s & 0.055s & \textbf{0.004s} & \textbf{0.004s} & \textbf{0.004s} & \textbf{0.005s} \\
+& CPLEX MIP             & 0.005s & 0.005s & 0.006s & ERROR  & ERROR  & ERROR  & ERROR  & ERROR  & ERROR  \\
+& SCIP MIP              & 0.002s & 0.012s & 0.010s & 1.696s & 0.458s & 4.480s & 1.926s & 17.503s & 4.389s \\
+\bottomrule
+\end{tabular}
+}
+\end{table*}
+
+\subsection{Phân Tích Chuyên Sâu Các Hiện Tượng Thực Nghiệm}
+
+Dữ liệu trung vị qua 5 lần chạy độc lập đã làm sáng tỏ 4 quy luật cốt lõi:
+
+\subsubsection{Tính Ổn Định Tuyệt Đối của CPLEX CP Optimizer}
+Một trong những phát hiện ấn tượng nhất trong chuỗi 5 lần chạy là hành vi của \textbf{IBM CPLEX CP}:
+\begin{itemize}
+    \item Từ $N=4$ đến $N=100$, thời gian giải của CPLEX CP duy trì gần như \textbf{bất biến}, chỉ dao động hẹp trong khoảng $\mathbf{0.028s \dots 0.036s}$.
+    \item \textit{Nguyên nhân:} Thuật toán lan truyền toàn cục \texttt{AllDifferent} của CP Optimizer kết hợp với chiến lược phân nhánh tự động (\textit{Automatic Search Heuristics}) thu hẹp miền giá trị của bài toán $N$-Queens cực kỳ hiệu quả, triệt tiêu gần như toàn bộ chi phí bùng nổ tổ hợp khi $N$ tăng lên 100.
+\end{itemize}
+
+\subsubsection{SAT Binary — Phương Pháp Ổn Định Nhất Nhóm SAT}
+Trong khi các kỹ thuật SAT khác lần lượt gặp sự cố (Binomial chậm dần, Sequential và Commander bị TIMEOUT, Product dao động mạnh), \textbf{SAT Binary} là phương pháp SAT duy nhất duy trì tính ổn định hoàn hảo qua cả 5 lần chạy:
+\begin{itemize}
+    \item Thời gian giải tăng trưởng mượt mà: $0.010$s ($N=16$) $\to 0.109$s ($N=50$) $\to 1.378$s ($N=100$).
+    \item \textit{Nguyên nhân:} Do chỉ sử dụng $\lceil \log_2 m \rceil$ biến phụ nhị phân, số biến phụ của Binary không quá lớn để làm nhiễu heuristics phân nhánh VSIDS của solver Glucose-3, đồng thời số mệnh đề vẫn được kiểm soát tốt ở mức $O(m \log_2 m)$.
+\end{itemize}
+
+\subsubsection{Giải Mã Hiện Tượng Trồi Sụt (Heavy-tailed) của Product và Commander}
+Số liệu 5 lần chạy khẳng định hiện tượng trồi sụt của Product và Commander là có tính quy luật cấu trúc:
+\begin{itemize}
+    \item \textbf{SAT Product:} Bị TIMEOUT liên tục ở $N = 32, 40, 50, 60$, nhưng bất ngờ giải cực nhanh ở $N = 70$ (chỉ $0.148$s), sau đó lại TIMEOUT ở $N = 80$, rồi lại giải được ở $N = 90$ ($0.287$s) và $N = 100$ ($0.805$s). Hiện tượng này lặp lại nhất quán qua cả 5 lần chạy.
+    \item \textbf{SAT Commander:} Giải $N = 40$ chỉ mất $0.063$s (nhanh hơn cả $N = 32$ mất $0.283$s), giải được $N = 70$ ($7.727$s) nhưng lại TIMEOUT từ $N \ge 80$.
+    \item \textit{Bản chất thuật toán:} Cả 2 phương pháp đều biểu hiện rõ hiện tượng \textbf{Phân phối Đuôi Nặng (Heavy-tailed Runtime Distribution)} của các bộ giải SAT CDCL. Khi chia nhóm $k=3$ (Commander) hoặc chia lưới $p \times q$ (Product), sự chẵn lẻ của kích thước đường chéo tạo ra các lưới ô trống hoặc nhánh cây mất cân đối, khiến heuristic VSIDS đôi khi phân nhánh trúng biến phụ thay vì biến bàn cờ gốc, làm solver rơi vào trạng thái tìm kiếm mù quáng.
+\end{itemize}
+
+\subsubsection{Điểm Gãy của Pure CP và Giới Hạn Bản Quyền CPLEX MIP}
+\begin{itemize}
+    \item \textbf{Pure CP:} Chạy bằng $0.000$s ở $N=4, 8$ và $0.012$s ở $N=16$, nhưng từ $N \ge 32$ bị TIMEOUT 100\% ở cả 5 lần chạy. Đây là minh chứng rõ nét cho sự sụp đổ của thuật toán quay lui thuần túy trước không gian nghiệm $O(N!)$.
+    \item \textbf{CPLEX MIP:} Chạy rất nhanh ở $N \le 16$, nhưng từ $N \ge 32$ ($32^2 = 1.024 > 1.000$ biến nhị phân) lập tức dừng và báo lỗi \texttt{CplexSolverError} do chạm trần bản quyền IBM Community Edition.
+\end{itemize}
+
+\subsection{Số Liệu Đặc Biệt: Thử Nghiệm Áp Lực Siêu Quy Mô Cho Gurobi và CP-SAT (Runs 01 \& 02)}
+
+Để khai thác tối đa năng lực của bản quyền \textbf{Gurobi Academic WLS} và khảo sát giới hạn chịu tải thực sự của các bộ giải mạnh nhất, chúng tôi tiến hành mở rộng không gian thử nghiệm lên siêu quy mô: $N \in [100, 200, 400, 800, 1600]$ (tổng hợp từ bộ dữ liệu mở rộng \texttt{benchmark\_results\_01} và \texttt{02}, xem Bảng \ref{tab:extreme-scale}).
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\caption{Thử nghiệm áp lực siêu quy mô: Thời gian giải (giây) tại các kích thước $N \ge 100$}
+\label{tab:extreme-scale}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{rrrrrrrr}
+\toprule
+\textbf{N} & \textbf{Số biến (ILP)} & \textbf{Gurobi MIP} & \textbf{CP-SAT Bool} & \textbf{CP-SAT (Int)} & \textbf{SAT Binary} & \textbf{SAT Product} & \textbf{SCIP MIP} \\
+\midrule
+100  & 10.000    & \textbf{0.0047s} & 0.4556s  & 0.7108s  & 1.3594s  & 1.0108s  & 3.8109s \\
+200  & 40.000    & \textbf{0.3847s} & 1.7493s  & 17.8954s & 16.8442s & 7.3125s  & TIMEOUT \\
+400  & 160.000   & \textbf{0.0503s} & 8.3878s  & TIMEOUT  & TIMEOUT  & TIMEOUT  & TIMEOUT \\
+800  & 640.000   & \textbf{0.2240s} & 22.7605s & TIMEOUT  & TIMEOUT  & TIMEOUT  & TIMEOUT \\
+1600 & 2.560.000 & TIMEOUT          & TIMEOUT  & TIMEOUT  & TIMEOUT  & TIMEOUT  & TIMEOUT \\
+\bottomrule
+\end{tabular}
+}
+\end{table*}
+
+\noindent \textbf{Ba hiện tượng học thuật đặc biệt rút ra từ tập dữ liệu mở rộng:}
+
+\begin{enumerate}
+    \item \textbf{Kỳ tích giải $640.000$ biến nhị phân của Gurobi MIP ở $N=800$ ($0.224$s):}
+    \begin{itemize}
+        \item Tại $N = 400$ ($160.000$ biến) và $N = 800$ ($\mathbf{640.000}$ biến nhị phân), trong khi hầu hết các solver khác đều tê liệt hoặc chạm ngưỡng TIMEOUT 30 giây, Gurobi giải quyết bài toán chỉ trong \textbf{0.0503s} (ở $N=400$) và \textbf{0.2240s} (ở $N=800$).
+        \item \textit{Bản chất toán học:} N-Queens là bài toán tìm nghiệm nguyên khả thi thuần túy (Feasibility Problem). Gurobi sở hữu hệ thống \textit{Primal Feasibility Heuristics} (tiêu biểu là \textit{Feasibility Pump} và \textit{RINS}) tinh vi hàng đầu thế giới. Sau khi giải bài toán nới lỏng tuyến tính (LP Relaxation) tại nút gốc (\textit{Root Node}), thuật toán làm tròn thông minh chiếu thẳng tọa độ nghiệm liên tục vào một cấu hình nghiệm nguyên hợp lệ mà \textbf{hoàn toàn không cần phân nhánh (Zero Branching)}.
+    \end{itemize}
+
+    \item \textbf{Phân tích hiện tượng biến thiên cục bộ (Perturbation Outliers) ở Run 02:}
+    \begin{itemize}
+        \item Trong tập dữ liệu \texttt{benchmark\_results\_02}, ta quan sát thấy hai điểm dị biệt: tại $N=32$, Gurobi mất $0.664$s (thay vì $0.021$s bình thường) và tại $N=70$ mất $0.573$s (thay vì $0.004$s).
+        \item \textit{Giải thích chuyên môn:} Heuristic Feasibility Pump phụ thuộc vào thứ tự phá vỡ thế hòa điểm (\textit{tie-breaking}) trong bài toán LP ban đầu. Ở một số kích thước cụ thể hoặc do dao động luồng bộ nhớ, bước chiếu làm tròn ban đầu không thỏa mãn ngay các ràng buộc đường chéo, buộc Gurobi phải bổ sung một số mặt cắt (\textit{Cutting Planes}) hoặc duyệt qua một vài nút nhánh phụ trước khi tìm thấy nghiệm nguyên, làm thời gian tăng thêm khoảng $0.5$ giây.
+    \end{itemize}
+
+    \item \textbf{Tại sao CP-SAT Boolean vượt qua CP-SAT Integer ở siêu quy mô?}
+    \begin{itemize}
+        \item Bảng \ref{tab:extreme-scale} cho thấy tại $N=200$, CP-SAT Boolean giải trong $1.75$s trong khi CP-SAT Integer mất tới $17.90$s; đến $N=400$ và $800$, chỉ duy nhất CP-SAT Boolean còn sống sót ($8.39$s và $22.76$s) trong khi Integer bị TIMEOUT.
+        \item \textit{Lý do:} Ràng buộc \texttt{AllDifferent} trên đường chéo có miền giá trị trải dài từ $-(N-1)$ đến $2N-2$ (tập giá trị lớn gấp đôi số lượng biến $N$). Thuật toán lọc miền giá trị của CP trên đường chéo bị lỏng lẻo dần khi $N$ tăng cao, dẫn đến bùng nổ quay lui trên biến nguyên. Trong khi đó, mô hình Boolean chuyển bài toán về không gian nhị phân 0-1 thuần túy, cho phép bộ máy SAT bên trong OR-Tools kích hoạt kỹ thuật Two Watched Literals và học mệnh đề mâu thuẫn (CDCL) để cắt tỉa không gian tìm kiếm hiệu quả hơn hẳn.
+    \end{itemize}
+\end{enumerate}
+
+\section{Tổng kết và Đánh giá Ưu nhược điểm (Conclusion)}
+
+\subsection{Bảng Đánh giá Tổng hợp Các Phương pháp}
+
+Tổng hợp từ các phân tích quy mô mô hình (Bảng \ref{tab:model-scale}), thời gian giải trung vị qua 5 lần chạy thực nghiệm (Bảng \ref{tab:median-results}), và đặc biệt là kiểm chứng chịu tải ở thử nghiệm áp lực siêu quy mô lên tới $N=800$ (Bảng \ref{tab:extreme-scale}), Bảng \ref{tab:summary-pros-cons} tóm lược các ưu nhược điểm cốt lõi và giới hạn thực tế của từng trường phái tiếp cận.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Đánh giá ưu và nhược điểm thực tế giữa các trường phái (kết hợp dữ liệu từ Bảng \ref{tab:median-results} và Bảng \ref{tab:extreme-scale})}
+\label{tab:summary-pros-cons}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{p{2.6cm}p{6.8cm}p{6.8cm}}
+\toprule
+\textbf{Phương pháp} & \textbf{Ưu điểm nổi bật} & \textbf{Nhược điểm chính} \\
+\midrule
+\textbf{SAT (Sequential)} & Ràng buộc tuyến tính $O(m)$, lan truyền đơn vị rất mạnh, không cần solver thương mại. & Vẫn đòi hỏi mã hóa phức tạp; không trực quan bằng mô hình biến nguyên; dễ TIMEOUT ở $N \ge 100$. \\
+\midrule
+\textbf{SAT (Binary)} & Phương pháp ổn định nhất nhóm SAT; số bit phụ chỉ $O(\log_2 m)$; thời gian tăng mượt mà ($1.38$s ở $N=100$). & Suy diễn gián tiếp qua bit; không mở rộng được qua $N \ge 400$ như Bảng \ref{tab:extreme-scale}. \\
+\midrule
+\textbf{SAT (Binomial)} & Cực kỳ dễ hiểu và cài đặt; rất nhanh ở $N \le 16$. & Bùng nổ số mệnh đề theo $O(N^4)$ ($>1.64$ triệu ở $N=100$), gây áp lực lớn lên bộ nhớ cache. \\
+\midrule
+\textbf{Pure CP} & Không phụ thuộc thư viện ngoài; giải tức thì ở $N \le 12$. & Bùng nổ thời gian theo hàm mũ $O(N!)$, sụp đổ và TIMEOUT hoàn toàn khi $N \ge 32$. \\
+\midrule
+\textbf{CPLEX CP} & \textbf{Ổn định tuyệt đối}: Thời gian gần như hằng số ($0.028$s--$0.036$s từ $N=4$ đến $N=100$) nhờ lan truyền \texttt{AllDifferent}. & Đòi hỏi cài đặt IBM CPLEX Optimization Studio. \\
+\midrule
+\textbf{CP-SAT (Integer)} & Biểu diễn $O(N)$ tự nhiên, tốn cực ít RAM; giải rất tốt và ổn định ở quy mô tiêu chuẩn $N \le 100$ ($0.73$s). & Bị TIMEOUT ở $N \ge 400$ do miền lọc chéo rộng (chi tiết tại Bảng \ref{tab:extreme-scale}). \\
+\midrule
+\textbf{CP-SAT (Boolean)} & Tận dụng triệt để bộ máy SAT CDCL của OR-Tools; sống sót ấn tượng đến $N=800$ ($22.76$s) ở Bảng \ref{tab:extreme-scale}. & Số biến và ràng buộc bậc $O(N^2)$, tốn nhiều tài nguyên hơn mô hình biến nguyên. \\
+\midrule
+\textbf{Gurobi MIP} & \textbf{Vượt trội ở siêu quy mô}: Tìm nghiệm tức thì ở $N=100$ và giải $640.000$ biến ở $N=800$ chỉ trong \textbf{0.224s} (Bảng \ref{tab:extreme-scale}) nhờ Primal Feasibility Heuristics. & Đòi hỏi bản quyền Academic WLS/Commercial; tốn bộ nhớ do mô hình hóa ma trận $N^2$ biến nhị phân. \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\subsection{Khuyến nghị thực tế}
+\begin{itemize}
+    \item \textbf{Khi bài toán ở quy mô vừa và chuẩn ($N \le 100$):} \textbf{CPLEX CP} và \textbf{CP-SAT (Integer)} là lựa chọn hoàn hảo nhất nhờ mô hình tự nhiên chỉ với $N$ biến, không tốn RAM và cho tốc độ giải cực nhanh. Nếu muốn phương pháp thuần SAT miễn phí mã nguồn mở, \textbf{SAT Binary} là giải pháp an toàn và ổn định nhất.
+    \item \textbf{Khi bài toán ở siêu quy mô ($N \ge 200$ đến $N=800$):} Như chứng minh từ các kiểm thử thực nghiệm tại Bảng \ref{tab:extreme-scale}, \textbf{Gurobi MIP} (tốc độ $0.224$s ở $N=800$) và \textbf{CP-SAT Boolean} ($22.76$s ở $N=800$) là hai công cụ duy nhất đủ năng lực vượt qua giới hạn không gian hàng trăm nghìn biến nhị phân mà không bị rơi vào bẫy tìm kiếm bế tắc.
+    \item \textbf{Khi kết hợp bài toán tối ưu hóa chi phí thực tế (Optimization vs. Feasibility):} \textbf{Gurobi MIP} và \textbf{CP-SAT} tiếp tục là công cụ hàng đầu nhờ khả năng tích hợp linh hoạt giữa hàm mục tiêu tuyến tính và hệ ràng buộc tổ hợp phức tạp.
+\end{itemize}
+
+\section*{Data Availability}
+\noindent Toàn bộ mã nguồn triển khai 12 phương pháp giải, kịch bản tự động hóa benchmark, toàn bộ tập dữ liệu thô qua 5 lần chạy độc lập và 2 lần chạy áp lực siêu quy mô, cùng mã nguồn \LaTeX{} của báo cáo này được công khai tại kho mã nguồn GitHub: \\
+\url{https://github.com/dxbang1383/N_Queens}
+
+\begin{thebibliography}{00}
+
+\bibitem{bezzel1848}
+M. Bezzel, ``Schachfreund,'' \emph{Berliner Schachzeitung}, vol. 3, pp. 363, 1848.
+
+\bibitem{bell2009survey}
+J. Bell and B. Stevens, ``A survey for the $N$-queens problem,'' \emph{Discrete Applied Mathematics}, vol. 157, no. 1, pp. 1--29, 2009.
+
+\bibitem{sinz2005towards}
+C. Sinz, ``Towards an optimal CNF encoding of boolean cardinality constraints,'' in \emph{CP}, Springer, 2005, pp. 827--831.
+
+\bibitem{gurobi}
+Gurobi Optimization, LLC, ``Gurobi Optimizer Reference Manual,'' 2024. [Online]. Có sẵn tại: \url{https://www.gurobi.com}
+
+\bibitem{ortools}
+L. Perron and V. Didier, ``OR-Tools,'' Google, 2024. [Online]. Có sẵn tại: \url{https://developers.google.com/optimization}
+
+\bibitem{cplex}
+IBM Corp., ``IBM ILOG CPLEX Optimization Studio User's Manual,'' Version 22.1, 2022.
+
+\end{thebibliography}
+
+\end{document}

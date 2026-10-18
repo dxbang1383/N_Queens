@@ -1,0 +1,400 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{cite}
+\usepackage{caption}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\title{\textbf{\LARGE Comprehensive Empirical Benchmark of Exact Methods for the $N$-Queens Problem: \\ SAT Encodings, Constraint Programming, and Integer Linear Programming}}
+
+\author{
+    \textbf{Author: Do Xuan Bang -- Student ID: 24021383}\\
+    Course: Modern Topics in Computer Science (INT3011E) \\
+    University of Engineering and Technology -- Vietnam National University, Hanoi (VNU-UET)
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\noindent The $N$-Queens problem is an iconic benchmark in computer science and combinatorial optimization, requiring the placement of $N$ mutually non-attacking queens on an $N \times N$ chessboard. This study provides an extensive, empirical comparative evaluation across three fundamental paradigms for exact combinatorial problem solving: SAT Solving (featuring 5 At-Most-One encoding techniques: Binomial, Binary, Sequential Counter, Commander, and Product), Constraint Programming (CP with 4 solvers and formulations: Pure CP Backtracking, OR-Tools CP-SAT with integer variables, CP-SAT Boolean, and IBM CPLEX CP Optimizer), and Integer Linear Programming (ILP/MIP with 3 solvers: Gurobi MIP, IBM CPLEX MIP, and SCIP). The benchmark suite was executed across 5 independent runs with strict subprocess-level timeout isolation (30.0s). The empirical results demonstrate key structural trade-offs and real-world boundaries: IBM CPLEX CP exhibits extraordinary near-constant runtime stability ($0.028$s--$0.036$s up to $N=100$); SAT Binary proves to be the most resilient and predictable SAT encoding; Gurobi MIP demonstrates exceptional scalability at extreme dimensions ($N=800$, solving $640,000$ binary variables in $0.224$s via Primal Feasibility Heuristics); whereas naive backtracking and pairwise SAT encodings suffer from catastrophic search-space and clause explosions ($O(N^4)$).
+\end{abstract}
+
+\vspace{0.5em}
+\noindent\textbf{Keywords:} $N$-Queens, SAT Solving, Constraint Programming, Integer Linear Programming, At-Most-One Encodings, Gurobi, OR-Tools, Empirical Benchmark.
+
+\vspace{1.5em}
+
+\section{Introduction}
+
+\subsection{The \texorpdfstring{$N$-Queens}{N-Queens} Problem and Context}
+The $N$-Queens problem originates from the 8-Queens puzzle introduced by Max Bezzel in 1848 on a standard $8 \times 8$ chessboard. The objective is conceptually simple: place $N$ queens on an $N \times N$ chessboard such that no two queens threaten each other. Under standard chess rules, this requires that no two queens share the same \textbf{row}, \textbf{column}, or \textbf{diagonal}.
+
+While finding an arbitrary valid configuration can be achieved via direct analytical construction methods, formulating $N$-Queens within canonical frameworks such as Propositional Satisfiability (SAT), Constraint Satisfaction Problems (CSP), and Integer Linear Programming (ILP) serves as a classic benchmark in combinatorial optimization. The pairwise conflict structure of $N$-Queens closely mirrors numerous real-world operational problems:
+\begin{itemize}
+    \item \textbf{Task Scheduling:} Allocating resources over time while avoiding temporal and spatial contention.
+    \item \textbf{VLSI Circuit Layout:} Arranging microelectronic components on chips to minimize crosstalk and mutual capacitive interference.
+    \item \textbf{Automated Software Testing:} Generating orthogonal test vectors that achieve full combinatorial condition/decision coverage.
+\end{itemize}
+
+\subsection{Three Exact Combinatorial Paradigms}
+To resolve combinatorial constraints definitively, modern computer science has developed three predominant exact algorithmic approaches:
+\begin{enumerate}
+    \item \textbf{SAT Solving (Boolean Satisfiability):} All constraints are converted into Conjunctive Normal Form (CNF). Modern Conflict-Driven Clause Learning (CDCL) solvers (such as Glucose and CaDiCaL) dynamically learn conflicting clauses and perform non-chronological backjumping to prune vast subspaces.
+    \item \textbf{Constraint Programming (CP):} Problems are modeled via variables defined over explicit finite domains coupled with high-level global constraints (e.g., \texttt{AllDifferent}). CP engines rely on Constraint Propagation algorithms to iteratively prune inconsistent values prior to search branching.
+    \item \textbf{Integer Linear Programming (ILP/MIP):} Formulated via continuous and integer variables constrained by systems of linear equalities and inequalities. Solvers such as Gurobi, CPLEX, and SCIP leverage Linear Programming Relaxation (LP Relaxation) within advanced Branch-and-Cut frameworks.
+\end{enumerate}
+
+\subsection{Research Objectives}
+Rather than confining the analysis to asymptotic theoretical bounds, the core objectives of this study are:
+\begin{enumerate}
+    \item \textbf{Provide a Rigorous, Standardized Benchmark:} Establish a reproducible, isolated benchmark harness evaluating 12 distinct solver configurations on identical hardware.
+    \item \textbf{Empirically Characterize 5 SAT AMO Encodings:} Quantify the impact of At-Most-One (AMO) encodings on variable count, clause density, and solver execution time.
+    \item \textbf{Identify Bottlenecks and Structural Limits:} Diagnose the root causes of solver degradation, heavy-tailed fluctuations, memory cache limits, and commercial licensing ceilings.
+    \item \textbf{Evaluate Extreme Scalability ($N \ge 100$ to $N=800$):} Subject the top-performing solvers to stress tests with hundreds of thousands of binary variables to reveal enterprise-grade solver capabilities.
+\end{enumerate}
+
+\section{Mathematical Formulations}
+
+\subsection{SAT Formulation (Boolean Logic)}
+In the SAT representation, the chessboard is encoded by an $N \times N$ Boolean matrix:
+\begin{equation}
+    x_{i,j} \in \{\text{True}, \text{False}\}, \quad 0 \le i, j < N
+\end{equation}
+where $x_{i,j} = \text{True}$ denotes that a queen is positioned at row $i$ and column $j$. For DIMACS CNF ingestion, each literal is mapped to a positive integer: $\text{id}(i, j) = i \times N + j + 1$.
+
+The constraint system consists of two primary categories:
+\begin{itemize}
+    \item \textbf{At-Least-One (ALO):} Every row and column must contain at least one queen:
+    \begin{align}
+        \text{Row } i: & \quad (x_{i,0} \lor x_{i,1} \lor \dots \lor x_{i,N-1}), \quad \forall i \in [0, N-1] \\
+        \text{Column } j: & \quad (x_{0,j} \lor x_{1,j} \lor \dots \lor x_{N-1,j}), \quad \forall j \in [0, N-1]
+    \end{align}
+    \item \textbf{At-Most-One (AMO):} Each row, column, and diagonal can host at most one queen. The diagonal AMO constraints generate the overwhelming majority of CNF clauses.
+\end{itemize}
+
+\subsection{Constraint Programming Formulation (CP)}
+Unlike SAT's quadratic variable matrix, CP formulates the problem natively using an array of $N$ integer decision variables:
+\begin{equation}
+    Q = [q_0, q_1, \dots, q_{N-1}], \quad \text{with } q_i \in \{0, 1, \dots, N-1\}
+\end{equation}
+Semantics: $q_i = j$ indicates that the queen in row $i$ is assigned to column $j$.
+Because each variable $q_i$ takes exactly one value, the constraint ``exactly one queen per row'' is satisfied by definition. The remaining restrictions are compactly enforced by three global constraints:
+\begin{align}
+    \texttt{AllDifferent}(q_0, q_1, \dots, q_{N-1}) & \quad \text{(Column uniqueness)} \\
+    \texttt{AllDifferent}(q_0 + 0, q_1 + 1, \dots, q_{N-1} + (N-1)) & \quad \text{(Main diagonal uniqueness)} \\
+    \texttt{AllDifferent}(q_0 - 0, q_1 - 1, \dots, q_{N-1} - (N-1)) & \quad \text{(Anti-diagonal uniqueness)}
+\end{align}
+\textbf{Properties:} The integer CP formulation requires strictly $N$ variables and 3 global constraints, achieving an optimal $O(N)$ representation footprint.
+
+\subsection{Integer Linear Programming Formulation (ILP/MIP)}
+The ILP model uses $N^2$ binary indicator variables $x_{i,j} \in \{0, 1\}$ subject to linear equality and inequality constraints:
+\begin{align}
+    \sum_{j=0}^{N-1} x_{i,j} &= 1, \quad \forall i \in [0, N-1] \quad \text{(Exactly one per row)} \\
+    \sum_{i=0}^{N-1} x_{i,j} &= 1, \quad \forall j \in [0, N-1] \quad \text{(Exactly one per column)} \\
+    \sum_{i-j=k} x_{i,j} &\le 1, \quad \forall k \in [-(N-1), N-1] \quad \text{(Main diagonals)} \\
+    \sum_{i+j=s} x_{i,j} &\le 1, \quad \forall s \in [0, 2N-2] \quad \text{(Anti-diagonals)}
+\end{align}
+The model comprises $N^2$ binary variables and $6N - 2$ linear constraints.
+
+\section{Analysis of 5 SAT At-Most-One (AMO) Encodings}
+
+An At-Most-One constraint over a set of $m$ Boolean variables $X = \{x_1, \dots, x_m\}$ can be encoded into CNF using five established techniques:
+
+\subsection{Binomial Encoding (Pairwise)}
+\textbf{Mechanism:} For every pair of variables $(x_a, x_b)$ with $a < b$, generate the binary clause $(\neg x_a \lor \neg x_b)$.
+\begin{itemize}
+    \item \textbf{Advantages:} Direct, conceptually simple, requires zero auxiliary variables.
+    \item \textbf{Disadvantages:} The clause count scales quadractically $\binom{m}{2} = O(m^2)$. When applied across all diagonals of an $N \times N$ board, the total clause count explodes as $O(N^4)$. At $N=100$, this yields over 1,640,000 clauses, overwhelming CPU L3 caches and degrading memory bandwidth.
+\end{itemize}
+
+\subsection{Binary Encoding}
+\textbf{Mechanism:} Employs $k = \lceil \log_2 m \rceil$ auxiliary binary variables $b_0, \dots, b_{k-1}$ representing bit positions. If variable $x_i$ is True, the bit variables $b$ are forced to mirror the unique binary index of $i$.
+\begin{itemize}
+    \item \textbf{Advantages:} Reduces the clause footprint to $O(m \log_2 m)$ while introducing minimal auxiliary variables ($O(\log_2 m)$).
+    \item \textbf{Disadvantages:} Weaker unit propagation propagation strength compared to pairwise encoding, as conflict information must propagate indirectly through intermediate bit variables.
+\end{itemize}
+
+\subsection{Sequential Counter Encoding}
+\textbf{Mechanism:} Introduces $m-1$ cumulative register variables $s_1, \dots, s_{m-1}$ (where $s_i = \text{True}$ indicates that at least one queen has appeared among positions $1$ to $i$). Conflicting placements are barred via $(\neg x_i \lor \neg s_{i-1})$.
+\begin{itemize}
+    \item \textbf{Advantages:} Strictly linear clause scaling $O(m)$ with $O(m)$ auxiliary variables. Maintains complete unit propagation strength.
+    \item \textbf{Disadvantages:} Substantial inflation of the total variable pool due to the auxiliary chain $s_i$.
+\end{itemize}
+
+\subsection{Commander Variable Encoding}
+\textbf{Mechanism:} Partitions the set of $m$ variables into disjoint groups (typically of size $k = 3$). Each group is governed by a commander variable $c_g$.
+\begin{itemize}
+    \item \textbf{Advantages:} Achieves linear complexity $O(m)$ with a noticeably smaller clause constant factor compared to Sequential Counter.
+    \item \textbf{Disadvantages:} Recursive group partitioning introduces structural asymmetry when $m$ is not divisible by $k$.
+\end{itemize}
+
+\subsection{Product Encoding (2D Grid Encoding)}
+\textbf{Mechanism:} Maps the $m$ variables into a virtual matrix of dimensions $p \times q \ge m$ (with $p \approx \sqrt{m}, q \approx \sqrt{m}$). Two sets of auxiliary variables represent row activations ($r_1, \dots, r_p$) and column activations ($c_1, \dots, c_q$). If $x_i = \text{True}$ at coordinate $(u, v)$, both $r_u$ and $c_v$ are asserted.
+\begin{itemize}
+    \item \textbf{Advantages:} Both auxiliary variables and clauses scale sublinearly as $O(\sqrt{m})$.
+    \item \textbf{Disadvantages:} The 2D auxiliary projection disrupts the variable selection heuristics (such as VSIDS in Glucose-3), triggering pronounced heavy-tailed runtime variability.
+\end{itemize}
+
+\section{Experimental Results and Empirical Evaluation}
+
+\subsection{Benchmark Environment and Evaluation Methodology}
+\begin{itemize}
+    \item \textbf{Hardware Environment:} Intel(R) Core(TM) i7-1185G7 @ 3.00 GHz (4 Cores, 8 Threads), 16 GB LPDDR4x RAM, 64-bit Windows OS.
+    \item \textbf{Software Stack:} Python 3.12, PySAT (Glucose-3 solver), Google OR-Tools (CP-SAT engine), Gurobi Optimizer 13.0 (Academic WLS License), IBM ILOG CPLEX 22.1 (Community Edition), SCIP Optimizer.
+    \item \textbf{Timeout Mechanism:} Each individual solver run was constrained to a strict 30.0-second limit. To prevent background C/C++ thread hanging, tests were orchestrated via isolated OS subprocesses (\texttt{subprocess.run}), ensuring definitive termination upon timeout expiration.
+\end{itemize}
+
+\subsection{Model Scale Evaluation: Variables and Constraints}
+
+Table \ref{tab:model-scale} reports the mathematical problem scale across representative dimensions $N$. The numbers reveal fundamental architectural differences across paradigms:
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\caption{Model scale comparison: Variable count (Vars) and Clause/Constraint count (Clauses/Constrs) across dimensions $N$}
+\label{tab:model-scale}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lrrrrrrrr}
+\toprule
+\textbf{Method} & \multicolumn{2}{c}{\textbf{N = 8}} & \multicolumn{2}{c}{\textbf{N = 16}} & \multicolumn{2}{c}{\textbf{N = 50}} & \multicolumn{2}{c}{\textbf{N = 100}} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}
+& \textbf{Vars} & \textbf{Clauses} & \textbf{Vars} & \textbf{Clauses} & \textbf{Vars} & \textbf{Clauses} & \textbf{Vars} & \textbf{Clauses} \\
+\midrule
+\textbf{SAT Binomial}    & 64  & 744  & 256   & 6,352 & 2,500  & 203,450 & 10,000 & \textbf{1,646,900} \\
+\textbf{SAT Binary}      & 170 & 724  & 568   & 3,924 & 4,032  & 57,240  & 13,674 & 269,020 \\
+\textbf{SAT Sequential}  & 270 & 600  & 1,182 & 2,728 & 12,198 & 28,908  & 48,560 & 116,328 \\
+\textbf{SAT Commander}   & 172 & 614  & 698   & 2,674 & 7,406  & 28,722  & 29,412 & 116,154 \\
+\textbf{SAT Product}     & 252 & 690  & 836   & 2,840 & 5,120  & 28,650  & 19,464 & 116,812 \\
+\midrule
+\textbf{CP-SAT (Integer)}& \textbf{8}  & \textbf{3} & \textbf{16}  & \textbf{3} & \textbf{50} & \textbf{3} & \textbf{100} & \textbf{3} \\
+\textbf{CPLEX CP}        & \textbf{8}  & \textbf{3} & \textbf{16}  & \textbf{3} & \textbf{50} & \textbf{3} & \textbf{100} & \textbf{3} \\
+\textbf{Pure CP}         & \textbf{8}  & \textbf{3} & \textbf{16}  & \textbf{3} & \textbf{50} & \textbf{3} & \textbf{100} & \textbf{3} \\
+\midrule
+\textbf{ILP / CP-SAT Bool} & 64 & 42 & 256  & 90 & 2,500 & 294 & 10,000 & 594 \\
+\bottomrule
+\end{tabular}
+}
+\end{table*}
+
+\noindent \textbf{Observations on Model Structure:}
+\begin{itemize}
+    \item \textbf{Clause Explosion in SAT Binomial:} At $N=8$, Binomial generates a modest $744$ clauses, but at $N=100$, this explodes to $\mathbf{1,646,900}$ clauses following the $O(N^4)$ diagonal combination law.
+    \item \textbf{Trade-offs of Advanced AMO Encodings:}
+    \begin{itemize}
+        \item \textit{Sequential Counter} and \textit{Commander} reduce clause growth to linear $O(m)$ ($\sim 116,000$ clauses at $N=100$, an over 14-fold reduction compared to Binomial), but at the expense of adding tens of thousands of auxiliary variables ($48,560$ variables in Sequential).
+        \item \textit{Binary Encoding} achieves superior variable balance (only $13,674$ variables at $N=100$) because bit indicators grow logarithmically $\lceil \log_2 m \rceil$.
+        \item \textit{Product Encoding} scales both variables and clauses sublinearly as $O(\sqrt{m})$, retaining a compact footprint ($19,464$ variables and $116,812$ clauses at $N=100$).
+    \end{itemize}
+    \item \textbf{Elegance of Integer CP Models:} CP-SAT, CPLEX CP, and Pure CP require strictly $N$ variables and 3 global \texttt{AllDifferent} constraints, demonstrating an optimal $O(N)$ spatial footprint.
+    \item \textbf{ILP 0-1 and CP-SAT Boolean Formulations:} Require $N^2$ binary variables and $6N-2$ linear inequalities (e.g., $10,000$ variables and $594$ constraints at $N=100$).
+\end{itemize}
+
+\subsection{Experimental Results Across 5 Independent Runs}
+
+To eliminate operating system scheduling noise and stochastic branch-and-bound fluctuations, all benchmarks were repeated over \textbf{5 independent runs} (corresponding to raw datasets \texttt{benchmark\_results\_1} through \texttt{5}). Table \ref{tab:median-results} presents the \textbf{Median Runtime} (in seconds) from $N = 4$ to $N = 100$.
+
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\caption{Median runtime (seconds) across 5 independent benchmark runs (Timeout = 30.0s)}
+\label{tab:median-results}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{llrrrrrrrrr}
+\toprule
+\textbf{Group} & \textbf{Solver} & \textbf{N=4} & \textbf{N=8} & \textbf{N=16} & \textbf{N=32} & \textbf{N=50} & \textbf{N=70} & \textbf{N=80} & \textbf{N=90} & \textbf{N=100} \\
+\midrule
+\textbf{SAT}
+& Binomial   & 0.000s & 0.001s & 0.015s & 0.059s & 0.536s & 2.674s & 4.816s & 8.174s & 12.786s \\
+& Binary     & 0.000s & 0.001s & 0.010s & 0.028s & 0.109s & 0.345s & 0.565s & 0.910s & 1.378s \\
+& Sequential & 0.001s & 0.001s & 0.012s & 0.114s & 2.854s & 28.443s & 15.891s & 23.534s & TIMEOUT \\
+& Commander  & 0.000s & 0.001s & 0.005s & 0.283s & 0.422s & 7.727s & TIMEOUT & TIMEOUT & TIMEOUT \\
+& Product    & 0.000s & 0.001s & 0.042s & TIMEOUT & TIMEOUT & 0.148s & TIMEOUT & 0.287s & 0.805s \\
+\midrule
+\textbf{CP}
+& \textbf{CP-SAT (Int)} & 0.019s & 0.019s & 0.025s & 0.063s & 0.165s & 0.332s & 0.436s & 0.625s & 0.727s \\
+& Pure CP               & 0.000s & 0.000s & 0.012s & TIMEOUT & TIMEOUT & TIMEOUT & TIMEOUT & TIMEOUT & TIMEOUT \\
+& \textbf{CPLEX CP}     & 0.031s & 0.028s & 0.029s & 0.030s & 0.033s & 0.034s & 0.035s & 0.034s & \textbf{0.036s} \\
+& CP-SAT Bool           & 0.015s & 0.019s & 0.027s & 0.046s & 0.089s & 0.204s & 0.277s & 0.340s & 0.473s \\
+\midrule
+\textbf{ILP}
+& \textbf{Gurobi MIP}   & 0.002s & 0.003s & 0.009s & 0.021s & 0.055s & \textbf{0.004s} & \textbf{0.004s} & \textbf{0.004s} & \textbf{0.005s} \\
+& CPLEX MIP             & 0.005s & 0.005s & 0.006s & ERROR  & ERROR  & ERROR  & ERROR  & ERROR  & ERROR  \\
+& SCIP MIP              & 0.002s & 0.012s & 0.010s & 1.696s & 0.458s & 4.480s & 1.926s & 17.503s & 4.389s \\
+\bottomrule
+\end{tabular}
+}
+\end{table*}
+
+\subsection{In-Depth Analysis of Experimental Phenomena}
+
+Cross-referencing median runtimes reveals four central empirical behaviors:
+
+\subsubsection{Near-Constant Invariant Stability of IBM CPLEX CP}
+One of the most remarkable outcomes across all 5 benchmark iterations is the runtime trajectory of \textbf{IBM CPLEX CP Optimizer}:
+\begin{itemize}
+    \item Across the entire range from $N=4$ to $N=100$, CPLEX CP execution time remains essentially \textbf{invariant}, hovering within the tight band of $\mathbf{0.028s \dots 0.036s}$.
+    \item \textit{Algorithmic Explanation:} The global \texttt{AllDifferent} propagation engine within CP Optimizer, paired with autonomous search heuristics, achieves instantaneous domain reduction. Combinatorial branching overhead is virtually eliminated even as $N$ reaches 100.
+\end{itemize}
+
+\subsubsection{SAT Binary — The Most Predictable SAT Encoding}
+While other SAT encodings encounter severe bottlenecks (Binomial slows down steadily, Sequential and Commander timeout, Product exhibits extreme swings), \textbf{SAT Binary} emerged as the only SAT technique maintaining smooth, monotonic scaling across all 5 runs:
+\begin{itemize}
+    \item Runtimes scale progressively: $0.010$s ($N=16$) $\to 0.109$s ($N=50$) $\to 1.378$s ($N=100$).
+    \item \textit{Algorithmic Explanation:} By introducing only $\lceil \log_2 m \rceil$ auxiliary bit variables, Binary encoding minimizes heuristic distortion in the solver's VSIDS branching tree while controlling clause inflation at $O(m \log_2 m)$.
+\end{itemize}
+
+\subsubsection{Demystifying the Heavy-Tailed Trajectory of Product and Commander}
+The multi-run data confirms that the unpredictable runtime spikes of Product and Commander encodings stem from structural algorithmic properties:
+\begin{itemize}
+    \item \textbf{SAT Product:} Consistently timed out at $N = 32, 40, 50, 60$, yet solved $N = 70$ in an astonishing $0.148$s, timed out again at $N = 80$, and solved $N = 90$ ($0.287$s) and $N = 100$ ($0.805$s).
+    \item \textbf{SAT Commander:} Solved $N = 40$ in $0.063$s (faster than $N = 32$ at $0.283$s), completed $N = 70$ in $7.727$s, but timed out consistently for $N \ge 80$.
+    \item \textit{Algorithmic Explanation:} Both encodings exhibit canonical \textbf{Heavy-Tailed Runtime Distributions} characteristic of CDCL solvers. Grouping variables into chunks of $k=3$ (Commander) or onto a $p \times q$ virtual grid (Product) creates asymmetric auxiliary clauses across parity boundaries. VSIDS heuristics occasionally branch on intermediate auxiliary variables rather than primary board literals, stranding the solver in unpromising search subtrees.
+\end{itemize}
+
+\subsubsection{The Breaking Point of Pure CP and CPLEX MIP Licensing Ceiling}
+\begin{itemize}
+    \item \textbf{Pure CP Backtracking:} Solves $N \le 16$ almost instantaneously ($0.000$s--$0.012$s), but experiences 100\% timeout failure at $N \ge 32$ across all 5 runs. This illustrates the collapse of unassisted depth-first search in an $O(N!)$ solution space.
+    \item \textbf{CPLEX MIP:} Demonstrates high speed for $N \le 16$, but at $N \ge 32$ ($32^2 = 1,024 > 1,000$ variables), it halts immediately with \texttt{CplexSolverError} due to the variable limit of the IBM Community Edition.
+\end{itemize}
+
+\subsection{Special Investigation: Extreme-Scale Stress Testing for Gurobi and CP-SAT (Runs 01 \& 02)}
+
+To push top-tier solvers to their architectural boundaries, we utilized our \textbf{Gurobi Academic WLS} enterprise license to perform an extreme-scale stress benchmark across board sizes $N = 100, 200, 400, 800,$ and $1600$ (synthesized from datasets \texttt{benchmark\_results\_01} and \texttt{02}, reported in Table \ref{tab:extreme-scale}).
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\caption{Extreme-scale stress testing: Solve time (seconds) at dimensions $N \ge 100$}
+\label{tab:extreme-scale}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{rrrrrrrr}
+\toprule
+\textbf{N} & \textbf{Variables (ILP)} & \textbf{Gurobi MIP} & \textbf{CP-SAT Bool} & \textbf{CP-SAT (Int)} & \textbf{SAT Binary} & \textbf{SAT Product} & \textbf{SCIP MIP} \\
+\midrule
+100  & 10,000    & \textbf{0.0047s} & 0.4556s  & 0.7108s  & 1.3594s  & 1.0108s  & 3.8109s \\
+200  & 40,000    & \textbf{0.3847s} & 1.7493s  & 17.8954s & 16.8442s & 7.3125s  & TIMEOUT \\
+400  & 160,000   & \textbf{0.0503s} & 8.3878s  & TIMEOUT  & TIMEOUT  & TIMEOUT  & TIMEOUT \\
+800  & 640,000   & \textbf{0.2240s} & 22.7605s & TIMEOUT  & TIMEOUT  & TIMEOUT  & TIMEOUT \\
+1600 & 2,560,000 & TIMEOUT          & TIMEOUT  & TIMEOUT  & TIMEOUT  & TIMEOUT  & TIMEOUT \\
+\bottomrule
+\end{tabular}
+}
+\end{table*}
+
+\noindent \textbf{Three Key Scientific Insights from Extreme-Scale Data:}
+
+\begin{enumerate}
+    \item \textbf{Gurobi MIP's Sub-Second Solution of $640,000$ Binary Variables at $N=800$ ($0.224$s):}
+    \begin{itemize}
+        \item At $N = 400$ ($160,000$ variables) and $N = 800$ ($\mathbf{640,000}$ binary variables), while competing solvers either froze or exceeded the 30-second timeout, Gurobi solved the problem in \textbf{0.0503s} and \textbf{0.2240s}, respectively.
+        \item \textit{Mathematical Explanation:} $N$-Queens is a pure feasibility problem without an objective function. Gurobi incorporates state-of-the-art \textit{Primal Feasibility Heuristics} (notably \textit{Feasibility Pump} and \textit{RINS}). After solving the initial continuous Linear Programming relaxation (LP Relaxation) at the root node, these heuristics project the continuous point directly into a feasible integer assignment with \textbf{Zero Branch-and-Bound Branching}.
+    \end{itemize}
+
+    \item \textbf{Analysis of Local Perturbation Outliers in Run 02:}
+    \begin{itemize}
+        \item In dataset \texttt{benchmark\_results\_02}, two localized outliers occurred: at $N=32$, Gurobi required $0.664$s (compared to the typical $0.021$s), and at $N=70$ it took $0.573$s (vs. $0.004$s).
+        \item \textit{Expert Explanation:} Feasibility Pump heuristics depend on LP simplex tie-breaking orders. At certain dimensions or thread memory shifts, the initial projection fails to satisfy diagonal constraints immediately, forcing Gurobi to generate cutting planes or explore a few branch nodes before locking onto an integer solution.
+    \end{itemize}
+
+    \item \textbf{Why CP-SAT Boolean Outperforms CP-SAT Integer at Extreme Scale:}
+    \begin{itemize}
+        \item Table \ref{tab:extreme-scale} reveals that at $N=200$, CP-SAT Boolean solved in $1.75$s whereas CP-SAT Integer required $17.90$s. At $N=400$ and $N=800$, CP-SAT Boolean was the only solver besides Gurobi to survive ($8.39$s and $22.76$s), whereas CP-SAT Integer timed out.
+        \item \textit{Explanation:} The diagonal \texttt{AllDifferent} constraints span an expression domain from $-(N-1)$ to $2N-2$ (nearly twice the number of queens). CP domain filtering becomes sparse and porous at high $N$, triggering excessive integer backtracking. Conversely, the Boolean 0-1 model maps directly onto OR-Tools' internal SAT engine, activating Two Watched Literals and CDCL clause learning to aggressively prune conflicting partial assignments.
+    \end{itemize}
+\end{enumerate}
+
+\section{Summary and Comparative Evaluation}
+
+\subsection{Comprehensive Synthesis of Evaluated Methods}
+
+Synthesizing the structural model properties (Table \ref{tab:model-scale}), the median runtimes across 5 benchmark trials (Table \ref{tab:median-results}), and the extreme-scale stress testing up to $N=800$ (Table \ref{tab:extreme-scale}), Table \ref{tab:summary-pros-cons} provides a comprehensive overview of the strengths and practical constraints of each paradigm.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Comprehensive synthesis of strengths, weaknesses, and practical limits across paradigms (incorporating data from Table \ref{tab:median-results} and Table \ref{tab:extreme-scale})}
+\label{tab:summary-pros-cons}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{p{2.6cm}p{6.8cm}p{6.8cm}}
+\toprule
+\textbf{Method} & \textbf{Key Advantages} & \textbf{Primary Limitations} \\
+\midrule
+\textbf{SAT (Sequential)} & Linear clauses $O(m)$, high unit propagation strength, requires no commercial solver. & Complex auxiliary chaining; less intuitive than integer models; prone to TIMEOUT at $N \ge 100$. \\
+\midrule
+\textbf{SAT (Binary)} & Most stable SAT encoding; logarithmic auxiliary bits $O(\log_2 m)$; smooth scaling ($1.38$s at $N=100$). & Indirect bit propagation; unable to scale past $N \ge 400$ as shown in Table \ref{tab:extreme-scale}. \\
+\midrule
+\textbf{SAT (Binomial)} & Highly intuitive and effortless to implement; very fast for $N \le 16$. & Severe $O(N^4)$ clause explosion ($>1.64$ million at $N=100$), causing severe CPU cache misses. \\
+\midrule
+\textbf{Pure CP} & Fully self-contained without external dependencies; instant solutions for $N \le 12$. & Exponential time complexity $O(N!)$; completely collapses with 100\% timeout at $N \ge 32$. \\
+\midrule
+\textbf{CPLEX CP} & \textbf{Absolute Invariance}: Solve times remain virtually constant ($0.028$s--$0.036$s for $N=4 \dots 100$) via \texttt{AllDifferent}. & Requires proprietary IBM CPLEX Optimization Studio installation. \\
+\midrule
+\textbf{CP-SAT (Integer)} & Elegant $O(N)$ formulation, extremely low memory footprint; highly efficient up to $N \le 100$ ($0.73$s). & Times out at $N \ge 400$ due to domain dilution on diagonal expressions (see Table \ref{tab:extreme-scale}). \\
+\midrule
+\textbf{CP-SAT (Boolean)} & Fully leverages OR-Tools' underlying SAT CDCL engine; impressively survives up to $N=800$ ($22.76$s) in Table \ref{tab:extreme-scale}. & $O(N^2)$ variables and constraints, requiring higher memory than the integer formulation. \\
+\midrule
+\textbf{Gurobi MIP} & \textbf{Unrivaled at Extreme Scale}: Solves $640,000$ binary variables at $N=800$ in just \textbf{0.224s} (Table \ref{tab:extreme-scale}) via Primal Feasibility Heuristics. & Requires commercial or academic license; $N^2$ binary matrix incurs moderate memory usage. \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\subsection{Practical Recommendations}
+\begin{itemize}
+    \item \textbf{For Standard to Moderate Dimensions ($N \le 100$):} \textbf{CPLEX CP} and \textbf{CP-SAT (Integer)} represent the optimal choices due to their concise $O(N)$ formulation, near-zero RAM usage, and instant solve times. When an open-source, purely SAT-based solver is required, \textbf{SAT Binary} offers the highest predictability and safety.
+    \item \textbf{For Extreme Dimensions ($N \ge 200$ to $N=800$):} As validated by the stress tests in Table \ref{tab:extreme-scale}, \textbf{Gurobi MIP} ($0.224$s at $N=800$) and \textbf{CP-SAT Boolean} ($22.76$s at $N=800$) are the only two frameworks capable of conquering combinatorial spaces exceeding half a million binary variables without getting lost in exponential branching.
+    \item \textbf{For Real-World Constrained Optimization (Cost vs. Feasibility):} \textbf{Gurobi MIP} and \textbf{CP-SAT} remain industry standards due to their seamless unification of linear objective functions and complex combinatorial constraints.
+\end{itemize}
+
+\section*{Acknowledgments}
+\noindent Special thanks to Dr. To Van Khanh for helping me understand the assignment requirements more clearly.
+
+\noindent Special thanks to Google Gemini for providing academic support (facilitating theoretical understanding of exact combinatorial solving methods) and assisting with the report writing process.
+
+\section*{Data Availability}
+\noindent All source code implementing the 12 solver configurations, automated benchmark scripts, raw data from 5 independent baseline trials and 2 extreme-scale stress tests, along with the complete \LaTeX{} manuscript source, are openly available in the GitHub repository: \\
+\url{https://github.com/dxbang1383/N_Queens}
+
+\begin{thebibliography}{00}
+
+\bibitem{bezzel1848}
+M. Bezzel, ``Schachfreund,'' \emph{Berliner Schachzeitung}, vol. 3, pp. 363, 1848.
+
+\bibitem{bell2009survey}
+J. Bell and B. Stevens, ``A survey for the $N$-queens problem,'' \emph{Discrete Applied Mathematics}, vol. 157, no. 1, pp. 1--29, 2009.
+
+\bibitem{sinz2005towards}
+C. Sinz, ``Towards an optimal CNF encoding of boolean cardinality constraints,'' in \emph{CP}, Springer, 2005, pp. 827--831.
+
+\bibitem{gurobi}
+Gurobi Optimization, LLC, ``Gurobi Optimizer Reference Manual,'' 2024. [Online]. Available: \url{https://www.gurobi.com}
+
+\bibitem{ortools}
+L. Perron and V. Didier, ``OR-Tools,'' Google, 2024. [Online]. Available: \url{https://developers.google.com/optimization}
+
+\bibitem{cplex}
+IBM Corp., ``IBM ILOG CPLEX Optimization Studio User's Manual,'' Version 22.1, 2022.
+
+\end{thebibliography}
+
+\end{document}
