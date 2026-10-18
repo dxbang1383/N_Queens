@@ -96,11 +96,11 @@ Unlike SAT's quadratic variable matrix, CP formulates the problem natively using
     Q = [q_0, q_1, \dots, q_{N-1}], \quad \text{with } q_i \in \{0, 1, \dots, N-1\}
 \end{equation}
 Semantics: $q_i = j$ indicates that the queen in row $i$ is assigned to column $j$.
-Because each variable $q_i$ takes exactly one value, the constraint ``exactly one queen per row'' is satisfied by definition. The remaining restrictions are compactly enforced by three global constraints:
+Because each variable $q_i$ takes exactly one value, the constraint ``exactly one queen per row'' is satisfied by definition. The remaining restrictions are compactly enforced by three global constraints \cite{regin1994}:
 \begin{align}
     \texttt{AllDifferent}(q_0, q_1, \dots, q_{N-1}) & \quad \text{(Column uniqueness)} \\
-    \texttt{AllDifferent}(q_0 + 0, q_1 + 1, \dots, q_{N-1} + (N-1)) & \quad \text{(Main diagonal uniqueness)} \\
-    \texttt{AllDifferent}(q_0 - 0, q_1 - 1, \dots, q_{N-1} - (N-1)) & \quad \text{(Anti-diagonal uniqueness)}
+    \texttt{AllDifferent}(q_0 - 0, q_1 - 1, \dots, q_{N-1} - (N-1)) & \quad \text{(Main diagonal uniqueness)} \\
+    \texttt{AllDifferent}(q_0 + 0, q_1 + 1, \dots, q_{N-1} + (N-1)) & \quad \text{(Anti-diagonal uniqueness)}
 \end{align}
 \textbf{Properties:} The integer CP formulation requires strictly $N$ variables and 3 global constraints, achieving an optimal $O(N)$ representation footprint.
 
@@ -207,9 +207,11 @@ Table \ref{tab:model-scale} reports the mathematical problem scale across repres
     \item \textbf{ILP 0-1 and CP-SAT Boolean Formulations:} Require $N^2$ binary variables and $6N-2$ linear inequalities (e.g., $10,000$ variables and $594$ constraints at $N=100$).
 \end{itemize}
 
+Figure \ref{fig:clauses} visually confirms the severe clause explosion of the Binomial encoding ($O(N^4)$) relative to linear/sublinear SAT encodings and the compact $O(N)$ integer CP formulations.
+
 \subsection{Experimental Results Across 5 Independent Runs}
 
-To eliminate operating system scheduling noise and stochastic branch-and-bound fluctuations, all benchmarks were repeated over \textbf{5 independent runs} (corresponding to raw datasets \texttt{benchmark\_results\_1} through \texttt{5}). Table \ref{tab:median-results} presents the \textbf{Median Runtime} (in seconds) from $N = 4$ to $N = 100$.
+To eliminate operating system scheduling noise and stochastic branch-and-bound fluctuations, all benchmarks were repeated over \textbf{5 independent runs} (corresponding to raw datasets \texttt{benchmark\_results\_1} through \texttt{5}). Table \ref{tab:median-results} presents the \textbf{Median Runtime} (in seconds) from $N = 4$ to $N = 100$, and Figure \ref{fig:runtime} illustrates the corresponding scaling curves across all 12 solvers.
 
 \begin{table*}[t]
 \centering
@@ -244,6 +246,22 @@ To eliminate operating system scheduling noise and stochastic branch-and-bound f
 }
 \end{table*}
 
+\begin{figure*}[htbp]
+    \centering
+    \begin{minipage}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{N-Queens/figures/scatter_clauses.png}
+        \caption{Growth of clauses and constraints across different formulations (Log-Log scale).}
+        \label{fig:clauses}
+    \end{minipage}\hfill
+    \begin{minipage}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{N-Queens/figures/scatter_runtime.png}
+        \caption{Empirical runtime comparison across all 12 solvers and encodings (Semi-Log scale).}
+        \label{fig:runtime}
+    \end{minipage}
+\end{figure*}
+
 \subsection{In-Depth Analysis of Experimental Phenomena}
 
 Cross-referencing median runtimes reveals four central empirical behaviors:
@@ -252,7 +270,7 @@ Cross-referencing median runtimes reveals four central empirical behaviors:
 One of the most remarkable outcomes across all 5 benchmark iterations is the runtime trajectory of \textbf{IBM CPLEX CP Optimizer}:
 \begin{itemize}
     \item Across the entire range from $N=4$ to $N=100$, CPLEX CP execution time remains essentially \textbf{invariant}, hovering within the tight band of $\mathbf{0.028s \dots 0.036s}$.
-    \item \textit{Algorithmic Explanation:} The global \texttt{AllDifferent} propagation engine within CP Optimizer, paired with autonomous search heuristics, achieves instantaneous domain reduction. Combinatorial branching overhead is virtually eliminated even as $N$ reaches 100.
+    \item \textit{Algorithmic Explanation:} The global \texttt{AllDifferent} propagation engine \cite{regin1994} within CP Optimizer, paired with autonomous search heuristics, achieves instantaneous domain reduction. Combinatorial branching overhead is virtually eliminated even as $N$ reaches 100.
 \end{itemize}
 
 \subsubsection{SAT Binary — The Most Predictable SAT Encoding}
@@ -385,6 +403,9 @@ J. Bell and B. Stevens, ``A survey for the $N$-queens problem,'' \emph{Discrete 
 
 \bibitem{sinz2005towards}
 C. Sinz, ``Towards an optimal CNF encoding of boolean cardinality constraints,'' in \emph{CP}, Springer, 2005, pp. 827--831.
+
+\bibitem{regin1994}
+J.-C. R\'{e}gin, ``A filtering algorithm for constraints of difference in CSPs,'' in \emph{Proceedings of the 12th National Conference on Artificial Intelligence (AAAI)}, 1994, pp. 362--367.
 
 \bibitem{gurobi}
 Gurobi Optimization, LLC, ``Gurobi Optimizer Reference Manual,'' 2024. [Online]. Available: \url{https://www.gurobi.com}

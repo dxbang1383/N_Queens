@@ -97,11 +97,11 @@ Khác với SAT phải dùng ma trận $N^2$ biến, mô hình CP biểu diễn 
     Q = [q_0, q_1, \dots, q_{N-1}], \quad \text{với } q_i \in \{0, 1, \dots, N-1\}
 \end{equation}
 Ý nghĩa: $q_i = j$ nghĩa là quân Hậu ở hàng $i$ đang nằm tại cột $j$.
-Do mỗi biến $q_i$ chỉ nhận đúng 1 giá trị, ràng buộc "mỗi hàng có đúng 1 quân Hậu" được thỏa mãn tự động. Toàn bộ các ràng buộc còn lại được gói gọn trong 3 ràng buộc toàn cục:
+Do mỗi biến $q_i$ chỉ nhận đúng 1 giá trị, ràng buộc "mỗi hàng có đúng 1 quân Hậu" được thỏa mãn tự động. Toàn bộ các ràng buộc còn lại được gói gọn trong 3 ràng buộc toàn cục \cite{regin1994}:
 \begin{align}
     \texttt{AllDifferent}(q_0, q_1, \dots, q_{N-1}) & \quad \text{(Không trùng cột)} \\
-    \texttt{AllDifferent}(q_0 + 0, q_1 + 1, \dots, q_{N-1} + (N-1)) & \quad \text{(Không trùng chéo chính)} \\
-    \texttt{AllDifferent}(q_0 - 0, q_1 - 1, \dots, q_{N-1} - (N-1)) & \quad \text{(Không trùng chéo phụ)}
+    \texttt{AllDifferent}(q_0 - 0, q_1 - 1, \dots, q_{N-1} - (N-1)) & \quad \text{(Không trùng chéo chính)} \\
+    \texttt{AllDifferent}(q_0 + 0, q_1 + 1, \dots, q_{N-1} + (N-1)) & \quad \text{(Không trùng chéo phụ)}
 \end{align}
 \textbf{Đặc điểm:} Mô hình CP chỉ dùng đúng $N$ biến và 3 ràng buộc toàn cục, đem lại không gian biểu diễn cấp bậc $O(N)$.
 
@@ -208,9 +208,11 @@ Bảng \ref{tab:model-scale} thể hiện quy mô biểu diễn toán học củ
     \item \textbf{Mô hình ILP 0-1 và CP-SAT Boolean:} Dùng ma trận $N^2$ biến nhị phân và $6N-2$ ràng buộc tuyến tính (ví dụ $N=100$ có $10.000$ biến và $594$ ràng buộc).
 \end{itemize}
 
+Hình \ref{fig:clauses} trực quan hóa rõ nét sự bùng nổ mệnh đề của mã hóa Binomial ($O(N^4)$) so với các phương pháp SAT tuyến tính/dưới tuyến tính và mô hình CP biến nguyên cực kỳ tinh gọn ($O(N)$).
+
 \subsection{Kết quả Thực nghiệm Qua 5 Lần Triển Khai Độc Lập}
 
-Để loại bỏ nhiễu ngẫu nhiên từ hệ điều hành và hiện tượng dao động heuristic rẽ nhánh, toàn bộ bài thử nghiệm được chạy lặp lại \textbf{5 lần độc lập} (tương ứng các tập dữ liệu \texttt{benchmark\_results\_1} đến \texttt{5}). Bảng \ref{tab:median-results} trình bày giá trị \textbf{Trung vị (Median Runtime)} của 5 lần chạy thực tế từ $N = 4$ đến $N = 100$.
+Để loại bỏ nhiễu ngẫu nhiên từ hệ điều hành và hiện tượng dao động heuristic rẽ nhánh, toàn bộ bài thử nghiệm được chạy lặp lại \textbf{5 lần độc lập} (tương ứng các tập dữ liệu \texttt{benchmark\_results\_1} đến \texttt{5}). Bảng \ref{tab:median-results} trình bày giá trị \textbf{Trung vị (Median Runtime)} của 5 lần chạy thực tế từ $N = 4$ đến $N = 100$, và Hình \ref{fig:runtime} minh họa trực quan xu hướng thời gian giải của toàn bộ 12 bộ giải.
 
 \begin{table*}[t]
 \centering
@@ -245,6 +247,22 @@ Bảng \ref{tab:model-scale} thể hiện quy mô biểu diễn toán học củ
 }
 \end{table*}
 
+\begin{figure*}[htbp]
+    \centering
+    \begin{minipage}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{N-Queens/figures/scatter_clauses.png}
+        \caption{Quy mô số lượng mệnh đề và ràng buộc theo kích thước $N$ (Thang log-log).}
+        \label{fig:clauses}
+    \end{minipage}\hfill
+    \begin{minipage}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{N-Queens/figures/scatter_runtime.png}
+        \caption{So sánh thời gian giải thực tế giữa 12 bộ giải và kỹ thuật mã hóa (Thang semi-log).}
+        \label{fig:runtime}
+    \end{minipage}
+\end{figure*}
+
 \subsection{Phân Tích Chuyên Sâu Các Hiện Tượng Thực Nghiệm}
 
 Dữ liệu trung vị qua 5 lần chạy độc lập đã làm sáng tỏ 4 quy luật cốt lõi:
@@ -253,7 +271,7 @@ Dữ liệu trung vị qua 5 lần chạy độc lập đã làm sáng tỏ 4 qu
 Một trong những phát hiện ấn tượng nhất trong chuỗi 5 lần chạy là hành vi của \textbf{IBM CPLEX CP}:
 \begin{itemize}
     \item Từ $N=4$ đến $N=100$, thời gian giải của CPLEX CP duy trì gần như \textbf{bất biến}, chỉ dao động hẹp trong khoảng $\mathbf{0.028s \dots 0.036s}$.
-    \item \textit{Nguyên nhân:} Thuật toán lan truyền toàn cục \texttt{AllDifferent} của CP Optimizer kết hợp với chiến lược phân nhánh tự động (\textit{Automatic Search Heuristics}) thu hẹp miền giá trị của bài toán $N$-Queens cực kỳ hiệu quả, triệt tiêu gần như toàn bộ chi phí bùng nổ tổ hợp khi $N$ tăng lên 100.
+    \item \textit{Nguyên nhân:} Thuật toán lan truyền toàn cục \texttt{AllDifferent} \cite{regin1994} của CP Optimizer kết hợp với chiến lược phân nhánh tự động (\textit{Automatic Search Heuristics}) thu hẹp miền giá trị của bài toán $N$-Queens cực kỳ hiệu quả, triệt tiêu gần như toàn bộ chi phí bùng nổ tổ hợp khi $N$ tăng lên 100.
 \end{itemize}
 
 \subsubsection{SAT Binary — Phương Pháp Ổn Định Nhất Nhóm SAT}
@@ -381,6 +399,9 @@ J. Bell and B. Stevens, ``A survey for the $N$-queens problem,'' \emph{Discrete 
 
 \bibitem{sinz2005towards}
 C. Sinz, ``Towards an optimal CNF encoding of boolean cardinality constraints,'' in \emph{CP}, Springer, 2005, pp. 827--831.
+
+\bibitem{regin1994}
+J.-C. R\'{e}gin, ``A filtering algorithm for constraints of difference in CSPs,'' in \emph{Proceedings of the 12th National Conference on Artificial Intelligence (AAAI)}, 1994, pp. 362--367.
 
 \bibitem{gurobi}
 Gurobi Optimization, LLC, ``Gurobi Optimizer Reference Manual,'' 2024. [Online]. Có sẵn tại: \url{https://www.gurobi.com}
