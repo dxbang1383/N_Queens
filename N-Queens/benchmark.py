@@ -26,7 +26,7 @@ SOLVERS = [
 ]
 
 # 2. Bo kich thuoc N 
-N_LIST = [4, 8, 12, 16, 20, 24, 28, 32, 40, 50, 100, 200, 400]
+N_LIST = [4, 8, 16, 32, 40, 50, 60, 70, 80, 90, 100]
 
 # 3. Thoi gian toi da cho moi phep thu (giay)
 TIMEOUT = 30.0

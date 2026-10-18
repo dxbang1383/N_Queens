@@ -157,5 +157,5 @@ def solve_binary(n, print_board=True):
         }
 
 if __name__ == "__main__":
-    n = 8
+    n = 300
     solve_binary(n)

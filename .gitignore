@@ -7,13 +7,6 @@ __pycache__/
 .vscode/
 .idea/
 
-# Benchmark outputs & Figures
-*.csv
-figures/
-*.png
-*.jpg
-*.jpeg
-
 # Environments
 venv/
 .env
