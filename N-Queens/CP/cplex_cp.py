@@ -1,7 +1,7 @@
 import time
 from docplex.cp.model import CpoModel
 
-def solve_cplex_cp(n):
+def solve_cplex_cp(n, print_board=True):
     model = CpoModel(name="N-Queens")
 
     # queens[i] la cot cua quan hau tai hang i
@@ -29,24 +29,51 @@ def solve_cplex_cp(n):
     try:
         sol = model.solve(LogVerbosity="Quiet")
         end_time = time.time()
+        elapsed = end_time - start_time
 
         # In ket qua
         if sol and sol.is_solution():
-            print(f"Thoi gian giai: {end_time - start_time:.4f} giay")
-            print("Ban co ket qua:")
-            for i in range(n):
-                col = sol.get_value(queens[i])
-                for j in range(n):
-                    if j == col:
-                        print("Q", end=" ")
-                    else:
-                        print(".", end=" ")
-                print()
+            if print_board:
+                print(f"Thoi gian giai: {elapsed:.4f} giay")
+                print("Ban co ket qua:")
+                for i in range(n):
+                    col = sol.get_value(queens[i])
+                    for j in range(n):
+                        if j == col:
+                            print("Q", end=" ")
+                        else:
+                            print(".", end=" ")
+                    print()
+            return {
+                "n": n,
+                "solver": "CPLEX_CP",
+                "status": "SAT",
+                "time": round(elapsed, 4),
+                "variables": n,
+                "clauses": 3,
+            }
         else:
-            print("Khong tim thay loi giai!")
+            if print_board:
+                print("Khong tim thay loi giai!")
+            return {
+                "n": n,
+                "solver": "CPLEX_CP",
+                "status": "UNSAT",
+                "time": round(elapsed, 4),
+                "variables": n,
+                "clauses": 3,
+            }
     except Exception as e:
-        print(f"Loi khi goi CPLEX CP Solver: {e}")
-        print("Luu y: Cplex CP yeu cau cai dat CP Optimizer (cpoptimizer.exe) tu IBM ILOG CPLEX Optimization Studio.")
+        if print_board:
+            print(f"Loi khi goi CPLEX CP: {e}")
+        return {
+            "n": n,
+            "solver": "CPLEX_CP",
+            "status": "ERROR",
+            "time": None,
+            "variables": n,
+            "clauses": 3,
+        }
 
 if __name__ == "__main__":
     n = 8

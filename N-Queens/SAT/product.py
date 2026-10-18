@@ -1,5 +1,6 @@
-from pysat.solvers import Glucose3
+import time
 import math
+from pysat.solvers import Glucose3
 
 next_var = 1
 
@@ -24,7 +25,12 @@ def at_least_one(variables):
 def at_most_one(variables):
     l = len(variables)
     if l <= 1: return []
-    if l == 2: return [[- variables[0], - variables[1]]]
+    if l == 2: return [[-variables[0], -variables[1]]]
+    if l == 3: return [
+        [-variables[0], -variables[1]],
+        [-variables[0], -variables[2]],
+        [-variables[1], -variables[2]]
+    ]
     else:
         clauses = []
 
@@ -51,12 +57,12 @@ def at_most_one(variables):
         # Dòng 2: Ràng buộc các biến hàng u đôi một không cùng true (AMO trên u)
         for i in range(p):
             for j in range(i + 1, p):
-                clauses.append([- u[i], - u[j]])
+                clauses.append([-u[i], -u[j]])
 
         # Dòng 3: Ràng buộc các biến cột v đôi một không cùng true (AMO trên v)
         for i in range(q):
             for j in range(i + 1, q):
-                clauses.append([- v[i], - v[j]])
+                clauses.append([-v[i], -v[j]])
 
         return clauses
 
@@ -117,28 +123,55 @@ def convert_to_clause(n):
 
     return clauses
 
-if __name__ == "__main__":
-    n = 8
+def solve_product(n, print_board=True):
+    t0 = time.time()
     clauses = convert_to_clause(n)
-
-    print(f"So luong menh de la : {len(clauses)}")
-    print(clauses)
+    num_clauses = len(clauses)
+    num_vars = next_var - 1
 
     solver = Glucose3()
-
     for c in clauses:
         solver.add_clause(c)
 
-    if solver.solve():
+    sat = solver.solve()
+    t1 = time.time()
+    elapsed = t1 - t0
+
+    if sat:
         model = solver.get_model()
-
-        for i in range(n):
-            for j in range(n):
-                if var(i, j, n) in model:
-                    print("Q", end=" ")
-                else:
-                    print(".", end=" ")
-            print()
-
+        if print_board:
+            print(f"So luong menh de la : {num_clauses}")
+            print(f"Thoi gian giai: {elapsed:.4f} giay")
+            print("Ban co ket qua:")
+            for i in range(n):
+                for j in range(n):
+                    if var(i, j, n) in model:
+                        print("Q", end=" ")
+                    else:
+                        print(".", end=" ")
+                print()
+        solver.delete()
+        return {
+            "n": n,
+            "solver": "SAT_Product",
+            "status": "SAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_clauses,
+        }
     else:
-        print("Khong tim thay loi giai!")
+        if print_board:
+            print("Khong tim thay loi giai!")
+        solver.delete()
+        return {
+            "n": n,
+            "solver": "SAT_Product",
+            "status": "UNSAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_clauses,
+        }
+
+if __name__ == "__main__":
+    n = 8
+    solve_product(n)

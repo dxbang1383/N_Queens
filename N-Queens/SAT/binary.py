@@ -1,5 +1,6 @@
-from pysat.solvers import Glucose3
+import time
 import math
+from pysat.solvers import Glucose3
 
 next_var = 1
 
@@ -13,22 +14,19 @@ def new_var():
     next_var = next_var + 1
     return current_id
 
-def var(i, j, n) :
+def var(i, j, n):
     return i * n + j + 1
 
 def at_least_one(variables):
     return [variables]
 
 # Đầu vào var : là list chứa các ô có ràng buộc AMO với nhau 
-# Tức là 2 cặp bất kì trong biến đều không cùng có giá trị true (and của 2 cặp = false)
-# OR của phủ định 2 mệnh đề -a or -b
-# Với sequential thì có 4 dòng mệnh đề
+# Với binary: dùng các bit nhị phân để mã hóa
 def at_most_one(variables):
-
     l = len(variables)
-    if l == 1 : return []
-    if l == 2 : return [[- variables[0], - variables[1]]]
-    else :
+    if l <= 1: return []
+    if l == 2: return [[-variables[0], -variables[1]]]
+    else:
         clauses = []
         new_param = []
 
@@ -39,17 +37,14 @@ def at_most_one(variables):
 
         for i in range(l):
             target = variables[i]
-            temp_number = i  # Tạo bản sao của số i để chia dần
+            temp_number = i
 
             for j in range(len_binary):
-                # Lấy bit
                 bit_value = temp_number % 2
-                
                 temp_number = temp_number // 2
 
                 if bit_value == 1:
                     clauses.append(implies(target, new_param[j]))
-
                 else:
                     clauses.append(implies(target, -new_param[j]))
 
@@ -112,29 +107,55 @@ def convert_to_clause(n):
 
     return clauses
 
-if __name__ == "__main__":
-    n = 9
+def solve_binary(n, print_board=True):
+    t0 = time.time()
     clauses = convert_to_clause(n)
-
-    print(f"So luong menh de la : {len(clauses)}")
-    print(clauses)
+    num_clauses = len(clauses)
+    num_vars = next_var - 1
 
     solver = Glucose3()
-
     for c in clauses:
         solver.add_clause(c)
 
+    sat = solver.solve()
+    t1 = time.time()
+    elapsed = t1 - t0
 
-    if solver.solve():
+    if sat:
         model = solver.get_model()
-
-        for i in range(n):
-            for j in range(n):
-                if var(i, j, n) in model:
-                    print("Q", end=" ")
-                else:
-                    print(".", end=" ")
-            print()
-
+        if print_board:
+            print(f"So luong menh de la : {num_clauses}")
+            print(f"Thoi gian giai: {elapsed:.4f} giay")
+            print("Ban co ket qua:")
+            for i in range(n):
+                for j in range(n):
+                    if var(i, j, n) in model:
+                        print("Q", end=" ")
+                    else:
+                        print(".", end=" ")
+                print()
+        solver.delete()
+        return {
+            "n": n,
+            "solver": "SAT_Binary",
+            "status": "SAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_clauses,
+        }
     else:
-        print("Khong tim thay loi giai!")
+        if print_board:
+            print("Khong tim thay loi giai!")
+        solver.delete()
+        return {
+            "n": n,
+            "solver": "SAT_Binary",
+            "status": "UNSAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_clauses,
+        }
+
+if __name__ == "__main__":
+    n = 8
+    solve_binary(n)

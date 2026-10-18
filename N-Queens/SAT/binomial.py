@@ -1,10 +1,11 @@
+import time
 from pysat.solvers import Glucose3
 
 ## Quy ước : 
 # + Bàn cờ giả định trong đầu là đánh số từ 0 nhưng khi mã hóa thì trả về chỉ số được cộng thêm 1 để né (0,0)
 
 # Trả về chi số của ma trận 2 chiều trong mảng 1 chiều 
-def var(i, j, n) :
+def var(i, j, n):
     return i * n + j + 1
 
 # Đầu vào var : là list chứa các ô ( mảng 2d) có ràng buộc ALO với nhau vd: [1, 2, 3, 4]
@@ -79,29 +80,55 @@ def convert_to_clause(n):
 
     return clauses
 
-if __name__ == "__main__":
-    n = 9
+def solve_binomial(n, print_board=True):
+    t0 = time.time()
     clauses = convert_to_clause(n)
-
-    print(f"So luong menh de la : {len(clauses)}")
-    print(clauses)
+    num_clauses = len(clauses)
+    num_vars = n * n
 
     solver = Glucose3()
-
     for c in clauses:
         solver.add_clause(c)
 
+    sat = solver.solve()
+    t1 = time.time()
+    elapsed = t1 - t0
 
-    if solver.solve():
+    if sat:
         model = solver.get_model()
-
-        for i in range(n):
-            for j in range(n):
-                if var(i, j, n) in model:
-                    print("Q", end=" ")
-                else:
-                    print(".", end=" ")
-            print()
-
+        if print_board:
+            print(f"So luong menh de la : {num_clauses}")
+            print(f"Thoi gian giai: {elapsed:.4f} giay")
+            print("Ban co ket qua:")
+            for i in range(n):
+                for j in range(n):
+                    if var(i, j, n) in model:
+                        print("Q", end=" ")
+                    else:
+                        print(".", end=" ")
+                print()
+        solver.delete()
+        return {
+            "n": n,
+            "solver": "SAT_Binomial",
+            "status": "SAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_clauses,
+        }
     else:
-        print("Khong tim thay loi giai!")
+        if print_board:
+            print("Khong tim thay loi giai!")
+        solver.delete()
+        return {
+            "n": n,
+            "solver": "SAT_Binomial",
+            "status": "UNSAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_clauses,
+        }
+
+if __name__ == "__main__":
+    n = 8
+    solve_binomial(n)

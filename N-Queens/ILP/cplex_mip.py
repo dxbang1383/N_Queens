@@ -1,7 +1,7 @@
 import time
 from docplex.mp.model import Model
 
-def solve_cplex_mip(n):
+def solve_cplex_mip(n, print_board=True):
     # 1. Khoi tao model CPLEX MIP
     model = Model(name="N-Queens-CPLEX")
 
@@ -45,24 +45,46 @@ def solve_cplex_mip(n):
         if len(diag_vars) > 1:
             model.add_constraint(model.sum(diag_vars) <= 1)
 
+    num_vars = model.number_of_variables
+    num_constrs = model.number_of_constraints
+
     # 7. Solver giai bai toan
     start_time = time.time()
     solution = model.solve(log_output=False)
     end_time = time.time()
+    elapsed = end_time - start_time
 
     # 8. In ket qua
     if solution:
-        print(f"Thoi gian giai: {end_time - start_time:.4f} giay")
-        print("Ban co ket qua:")
-        for i in range(n):
-            for j in range(n):
-                if solution.get_value(x[i, j]) > 0.5:
-                    print("Q", end=" ")
-                else:
-                    print(".", end=" ")
-            print()
+        if print_board:
+            print(f"Thoi gian giai: {elapsed:.4f} giay")
+            print("Ban co ket qua:")
+            for i in range(n):
+                for j in range(n):
+                    if solution.get_value(x[i, j]) > 0.5:
+                        print("Q", end=" ")
+                    else:
+                        print(".", end=" ")
+                print()
+        return {
+            "n": n,
+            "solver": "CPLEX_MIP",
+            "status": "SAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_constrs,
+        }
     else:
-        print("Khong tim thay loi giai!")
+        if print_board:
+            print("Khong tim thay loi giai!")
+        return {
+            "n": n,
+            "solver": "CPLEX_MIP",
+            "status": "UNSAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_constrs,
+        }
 
 if __name__ == "__main__":
     n = 8

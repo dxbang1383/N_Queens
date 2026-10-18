@@ -2,7 +2,7 @@ import time
 import gurobipy as gp
 from gurobipy import GRB
 
-def solve_gurobi_mip(n):
+def solve_gurobi_mip(n, print_board=True):
     # 1. Khoi tao model Gurobi (tat thong bao log de man hinh gon gang)
     env = gp.Env(empty=True)
     env.setParam("OutputFlag", 0)
@@ -49,26 +49,48 @@ def solve_gurobi_mip(n):
         if len(diag_vars) > 1:
             model.addConstr(gp.quicksum(diag_vars) <= 1)
 
+    model.update()
+    num_vars = model.NumVars
+    num_constrs = model.NumConstrs
+
     # 7. Solver giai bai toan
     start_time = time.time()
     model.optimize()
     end_time = time.time()
+    elapsed = end_time - start_time
 
     # 8. In ket qua
     if model.status == GRB.OPTIMAL:
-        print(f"Thoi gian giai: {end_time - start_time:.4f} giay")
-        print("Ban co ket qua:")
-        for i in range(n):
-            for j in range(n):
-                if x[i, j].X > 0.5:
-                    print("Q", end=" ")
-                else:
-                    print(".", end=" ")
-            print()
+        if print_board:
+            print(f"Thoi gian giai: {elapsed:.4f} giay")
+            print("Ban co ket qua:")
+            for i in range(n):
+                for j in range(n):
+                    if x[i, j].X > 0.5:
+                        print("Q", end=" ")
+                    else:
+                        print(".", end=" ")
+                print()
+        return {
+            "n": n,
+            "solver": "Gurobi_MIP",
+            "status": "SAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_constrs,
+        }
     else:
-        print("Khong tim thay loi giai!")
+        if print_board:
+            print("Khong tim thay loi giai!")
+        return {
+            "n": n,
+            "solver": "Gurobi_MIP",
+            "status": "UNSAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_constrs,
+        }
 
 if __name__ == "__main__":
-    n = 40
-
+    n = 8
     solve_gurobi_mip(n)

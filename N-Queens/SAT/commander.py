@@ -1,5 +1,5 @@
+import time
 from pysat.solvers import Glucose3
-import math
 
 next_var = 1
 
@@ -24,7 +24,7 @@ def at_least_one(variables):
 def at_most_one(variables):
     l = len(variables)
     if l <= 1: return []
-    if l == 2: return [[- variables[0], - variables[1]]]
+    if l == 2: return [[-variables[0], -variables[1]]]
     else:
         clauses = []
         commanders = []
@@ -48,7 +48,7 @@ def at_most_one(variables):
                 k = len(group)
                 for g1 in range(k):
                     for g2 in range(g1 + 1, k):
-                        clauses.append([- group[g1], - group[g2]])
+                        clauses.append([-group[g1], -group[g2]])
 
                 # Dòng 2: Biến trong nhóm là true thì biến chỉ huy phải là true (x -> c)
                 for x in group:
@@ -117,28 +117,55 @@ def convert_to_clause(n):
 
     return clauses
 
-if __name__ == "__main__":
-    n = 8
+def solve_commander(n, print_board=True):
+    t0 = time.time()
     clauses = convert_to_clause(n)
-
-    print(f"So luong menh de la : {len(clauses)}")
-    print(clauses)
+    num_clauses = len(clauses)
+    num_vars = next_var - 1
 
     solver = Glucose3()
-
     for c in clauses:
         solver.add_clause(c)
 
-    if solver.solve():
+    sat = solver.solve()
+    t1 = time.time()
+    elapsed = t1 - t0
+
+    if sat:
         model = solver.get_model()
-
-        for i in range(n):
-            for j in range(n):
-                if var(i, j, n) in model:
-                    print("Q", end=" ")
-                else:
-                    print(".", end=" ")
-            print()
-
+        if print_board:
+            print(f"So luong menh de la : {num_clauses}")
+            print(f"Thoi gian giai: {elapsed:.4f} giay")
+            print("Ban co ket qua:")
+            for i in range(n):
+                for j in range(n):
+                    if var(i, j, n) in model:
+                        print("Q", end=" ")
+                    else:
+                        print(".", end=" ")
+                print()
+        solver.delete()
+        return {
+            "n": n,
+            "solver": "SAT_Commander",
+            "status": "SAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_clauses,
+        }
     else:
-        print("Khong tim thay loi giai!")
+        if print_board:
+            print("Khong tim thay loi giai!")
+        solver.delete()
+        return {
+            "n": n,
+            "solver": "SAT_Commander",
+            "status": "UNSAT",
+            "time": round(elapsed, 4),
+            "variables": num_vars,
+            "clauses": num_clauses,
+        }
+
+if __name__ == "__main__":
+    n = 8
+    solve_commander(n)

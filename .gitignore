@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE & Editor files
+.vscode/
+.idea/
+
+# Benchmark outputs & Figures
+*.csv
+figures/
+*.png
+*.jpg
+*.jpeg
+
+# Environments
+venv/
+.env
